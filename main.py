@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from crewai import Agent, Task, Crew, Process
 from canvas_tools import CanvasTools
 from github_tools import GitHubTools
-from templates import generate_starter_files, normalize_slug
+from templates import generate_starter_files, normalize_slug, html_to_markdown
 
 
 # Load environment variables
@@ -128,9 +128,10 @@ class CanvasGitHubAgent:
         assignment_description = assignment.get("description", "")
         due_at = assignment.get("due_at", "No due date")
         
-        # Clean up the description (remove HTML tags if present)
-        clean_description = re.sub(r'<[^>]+>', '', assignment_description)
-        clean_description = clean_description.strip()[:200]  # Limit length
+        # Convert HTML assignment content to Markdown for the README
+        full_description = html_to_markdown(assignment_description)
+        # Short plain-text version for GitHub repo description and code comments
+        short_description = re.sub(r'<[^>]+>', '', assignment_description).strip()[:200]
         
         # Create a slug for the repo name using shared utility
         repo_name = normalize_slug(assignment_name)
@@ -139,7 +140,7 @@ class CanvasGitHubAgent:
         print(f"\nCreating repository: {repo_name}")
         repo = await self.github_tools.create_repository(
             name=repo_name,
-            description=f"{assignment_name} - Due: {due_at}",
+            description=f"{assignment_name} - Due: {due_at}"[:350],
             private=False,
             auto_init=True
         )
@@ -153,10 +154,11 @@ class CanvasGitHubAgent:
             print(f"   Owner: {self.github_org or self.github_username}")
             return None
         
-        # Generate starter files
+        # Generate starter files with full assignment content in README
         starter_files = generate_starter_files(
             assignment_name=assignment_name,
-            assignment_description=clean_description,
+            assignment_description=full_description,
+            short_description=short_description,
             due_date=due_at,
             language=language
         )
