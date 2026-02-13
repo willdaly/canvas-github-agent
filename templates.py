@@ -2,7 +2,75 @@
 Starter code templates for different types of assignments.
 """
 import re
+from html import unescape
 
+
+def html_to_markdown(html: str) -> str:
+    """
+    Convert HTML assignment content to readable Markdown.
+
+    Handles common Canvas HTML patterns: headings, paragraphs, lists,
+    bold/italic, links, code blocks, and tables.
+    """
+    if not html:
+        return ""
+
+    text = html
+
+    # Decode HTML entities
+    text = unescape(text)
+
+    # Remove <style> and <link> tags and their content
+    text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL)
+    text = re.sub(r'<link[^>]*/?>', '', text)
+
+    # Headings
+    for i in range(1, 7):
+        text = re.sub(
+            rf'<h{i}[^>]*>(.*?)</h{i}>',
+            lambda m, lvl=i: f"\n{'#' * lvl} {m.group(1).strip()}\n",
+            text, flags=re.DOTALL,
+        )
+
+    # Bold / italic
+    text = re.sub(r'<(strong|b)>(.*?)</\1>', r'**\2**', text, flags=re.DOTALL)
+    text = re.sub(r'<(em|i)>(.*?)</\1>', r'*\2*', text, flags=re.DOTALL)
+
+    # Code blocks
+    text = re.sub(r'<pre[^>]*><code[^>]*>(.*?)</code></pre>', r'\n```\n\1\n```\n', text, flags=re.DOTALL)
+    text = re.sub(r'<code>(.*?)</code>', r'`\1`', text, flags=re.DOTALL)
+
+    # Links
+    text = re.sub(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', r'[\2](\1)', text, flags=re.DOTALL)
+
+    # Images
+    text = re.sub(r'<img[^>]+src="([^"]+)"[^>]*alt="([^"]*)"[^>]*/?>',  r'![\2](\1)', text)
+    text = re.sub(r'<img[^>]+src="([^"]+)"[^>]*/?>',  r'![image](\1)', text)
+
+    # Lists
+    text = re.sub(r'<li[^>]*>(.*?)</li>', r'- \1', text, flags=re.DOTALL)
+    text = re.sub(r'</?[ou]l[^>]*>', '\n', text)
+
+    # Paragraphs and line breaks
+    text = re.sub(r'<br\s*/?>', '\n', text)
+    text = re.sub(r'<p[^>]*>(.*?)</p>', r'\n\1\n', text, flags=re.DOTALL)
+    text = re.sub(r'<hr\s*/?>', '\n---\n', text)
+
+    # Table support (basic)
+    text = re.sub(r'<tr[^>]*>(.*?)</tr>', lambda m: '| ' + m.group(1) + '\n', text, flags=re.DOTALL)
+    text = re.sub(r'<t[hd][^>]*>(.*?)</t[hd]>', r'\1 | ', text, flags=re.DOTALL)
+    text = re.sub(r'</?table[^>]*>', '\n', text)
+    text = re.sub(r'</?thead[^>]*>', '', text)
+    text = re.sub(r'</?tbody[^>]*>', '', text)
+
+    # Strip remaining tags
+    text = re.sub(r'<[^>]+>', '', text)
+
+    # Clean up whitespace
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = text.strip()
+
+    return text
 
 def normalize_slug(name: str) -> str:
     """
@@ -360,16 +428,18 @@ def generate_starter_files(
     assignment_name: str,
     assignment_description: str,
     due_date: str,
-    language: str = "python"
+    language: str = "python",
+    short_description: str = "",
 ) -> dict:
     """
     Generate starter files for an assignment.
     
     Args:
         assignment_name: Name of the assignment
-        assignment_description: Description of the assignment
+        assignment_description: Full assignment description (Markdown) for README
         due_date: Due date string
         language: Programming language
+        short_description: Brief plain-text description for code file comments
         
     Returns:
         Dictionary mapping file paths to their content
@@ -377,11 +447,14 @@ def generate_starter_files(
     template = get_template_for_language(language)
     assignment_slug = normalize_slug(assignment_name)
     
+    if not short_description:
+        short_description = assignment_description[:200]
+    
     files = {}
     for filepath, content_template in template.items():
         content = content_template.format(
             assignment_name=assignment_name,
-            assignment_description=assignment_description,
+            assignment_description=assignment_description if filepath == "README.md" else short_description,
             due_date=due_date,
             assignment_slug=assignment_slug
         )
