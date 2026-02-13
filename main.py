@@ -28,7 +28,8 @@ class CanvasGitHubAgent:
         self.canvas_tools = CanvasTools()
         self.github_tools = GitHubTools()
         self.github_username = os.getenv("GITHUB_USERNAME")
-        self.github_org = os.getenv("GITHUB_ORG", "")
+        _org = os.getenv("GITHUB_ORG", "").strip()
+        self.github_org = _org if _org and not _org.startswith("#") else ""
         
     def create_assignment_fetcher_agent(self) -> Agent:
         """Create an agent responsible for fetching Canvas assignments."""
@@ -144,12 +145,13 @@ class CanvasGitHubAgent:
         )
         
         if not repo:
-            print("Warning: Could not create repository via MCP, using fallback")
-            # Fallback: return info for manual creation or use GitHub API directly
-            repo = {
-                "name": repo_name,
-                "owner": {"login": self.github_org or self.github_username}
-            }
+            print("\n❌ Failed to create repository. Possible causes:")
+            print("   - GitHub token lacks 'Administration: Read and write' permission")
+            print("   - Repository name already exists")
+            print("   - GITHUB_ORG is set to an invalid organization")
+            print(f"\n   Attempted repo name: {repo_name}")
+            print(f"   Owner: {self.github_org or self.github_username}")
+            return None
         
         # Generate starter files
         starter_files = generate_starter_files(
@@ -207,6 +209,10 @@ class CanvasGitHubAgent:
         # Step 2: Create GitHub repository with starter code
         print(f"\n🚀 Creating GitHub repository with {language} starter code...")
         result = await self.create_repository_task(assignment, language)
+        
+        if not result or "repository" not in result:
+            print("\n❌ Repository creation failed. See errors above.")
+            return None
         
         repo_info = result["repository"]
         owner = repo_info.get("owner", {}).get("login", self.github_username)

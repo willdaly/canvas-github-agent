@@ -1,6 +1,6 @@
 # Canvas-GitHub Agent
 
-A CrewAI-powered agent that automatically fetches assignments from Canvas LMS using [canvas-mcp](https://canvas-mcp.illinihunt.org/) and creates GitHub repositories with helpful file structure and starter code using GitHub MCP.
+A CrewAI-powered agent that automatically fetches assignments from Canvas LMS using [canvas-mcp](https://smithery.ai/servers/aryankeluskar/canvas-mcp) and creates GitHub repositories with helpful file structure and starter code using GitHub MCP.
 
 ## Features
 
@@ -14,7 +14,7 @@ A CrewAI-powered agent that automatically fetches assignments from Canvas LMS us
 ## Prerequisites
 
 - Python 3.10 or higher
-- Node.js (for MCP servers)
+- Node.js (for GitHub MCP server)
 - Canvas LMS API token
 - GitHub Personal Access Token
 
@@ -201,10 +201,14 @@ If repository creation fails:
 
 ### MCP Server Issues
 
-If MCP servers fail to start:
+If Canvas MCP fails:
+- Verify your Canvas API token is valid
+- Check that your Canvas URL is correct in `.env`
+- The Canvas MCP server is hosted remotely via [Smithery](https://smithery.ai/servers/aryankeluskar/canvas-mcp) — check its status page for outages
+
+If GitHub MCP fails:
 - Ensure Node.js is installed (`node --version`)
-- Try running `npx -y @illinihunt/canvas-mcp` manually to test
-- Check that the MCP server packages are accessible
+- Try running `npx -y @modelcontextprotocol/server-github` manually to test
 
 ## Contributing
 
@@ -216,6 +220,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- [canvas-mcp](https://canvas-mcp.illinihunt.org/) for Canvas LMS integration
+- [canvas-mcp](https://smithery.ai/servers/aryankeluskar/canvas-mcp) for Canvas LMS integration via Smithery
 - [CrewAI](https://github.com/joaomdmoura/crewAI) for agent framework
 - Model Context Protocol (MCP) for standardized tool integration

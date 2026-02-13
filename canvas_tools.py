@@ -1,5 +1,6 @@
 """
-Canvas MCP Tools for interacting with Canvas LMS through MCP server.
+Canvas MCP Tools for interacting with Canvas LMS through the Smithery-hosted
+aryankeluskar/canvas-mcp server via the Smithery CLI (stdio transport).
 """
 import os
 import json
@@ -10,24 +11,27 @@ from contextlib import asynccontextmanager
 
 
 class CanvasTools:
-    """Tools for interacting with Canvas LMS via MCP."""
+    """Tools for interacting with Canvas LMS via the Smithery Canvas MCP server."""
     
     def __init__(self):
         self.canvas_url = os.getenv("CANVAS_API_URL", "https://canvas.instructure.com")
         self.canvas_token = os.getenv("CANVAS_API_TOKEN")
-        self.mcp_server_url = os.getenv("CANVAS_MCP_SERVER_URL", "npx")
-        self.mcp_server_args = os.getenv("CANVAS_MCP_SERVER_ARGS", "-y,@illinihunt/canvas-mcp").split(",")
         
     @asynccontextmanager
     async def get_canvas_session(self):
-        """Create a Canvas MCP session."""
+        """Create a Canvas MCP session via Smithery CLI (stdio)."""
+        config = json.dumps({
+            "canvasApiKey": self.canvas_token,
+            "canvasBaseUrl": self.canvas_url,
+        })
+        
         server_params = StdioServerParameters(
-            command=self.mcp_server_url,
-            args=self.mcp_server_args,
-            env={
-                "CANVAS_API_URL": self.canvas_url,
-                "CANVAS_API_TOKEN": self.canvas_token,
-            }
+            command="npx",
+            args=[
+                "-y", "@smithery/cli", "run",
+                "@aryankeluskar/canvas-mcp",
+                "--config", config,
+            ],
         )
         
         async with stdio_client(server_params) as (read, write):
@@ -40,14 +44,23 @@ class CanvasTools:
         List all courses available to the user.
         
         Returns:
-            List of course dictionaries with id, name, and other details
+            List of course dictionaries with 'id' and 'name' keys
         """
         async with self.get_canvas_session() as session:
-            result = await session.call_tool("canvas_list_courses", arguments={})
+            result = await session.call_tool("get_courses", arguments={})
             if hasattr(result, 'content') and len(result.content) > 0:
                 content = result.content[0]
                 if hasattr(content, 'text'):
-                    return json.loads(content.text)
+                    data = json.loads(content.text)
+                    # The Smithery canvas-mcp server returns courses as
+                    # {"course_name": course_id, ...}.  Normalize to a list
+                    # of dicts so the rest of the codebase can use .get().
+                    if isinstance(data, dict):
+                        return [
+                            {"id": cid, "name": cname}
+                            for cname, cid in data.items()
+                        ]
+                    return data
             return []
     
     async def get_course_assignments(self, course_id: int) -> List[Dict[str, Any]]:
@@ -58,22 +71,32 @@ class CanvasTools:
             course_id: The Canvas course ID
             
         Returns:
-            List of assignment dictionaries
+            List of assignment dictionaries with 'id' and 'name' keys
         """
         async with self.get_canvas_session() as session:
             result = await session.call_tool(
-                "canvas_get_assignments",
-                arguments={"course_id": course_id}
+                "get_course_assignments",
+                arguments={"course_id": str(course_id)}
             )
             if hasattr(result, 'content') and len(result.content) > 0:
                 content = result.content[0]
                 if hasattr(content, 'text'):
-                    return json.loads(content.text)
+                    data = json.loads(content.text)
+                    # Normalize if server returns {"name": id, ...} dict
+                    if isinstance(data, dict):
+                        return [
+                            {"id": aid, "name": aname}
+                            for aname, aid in data.items()
+                        ]
+                    return data
             return []
     
     async def get_assignment_details(self, course_id: int, assignment_id: int) -> Optional[Dict[str, Any]]:
         """
         Get detailed information about a specific assignment.
+        
+        Note: The Smithery canvas-mcp server does not have a single-assignment
+        endpoint, so we fetch all assignments and filter by ID.
         
         Args:
             course_id: The Canvas course ID
@@ -82,16 +105,8 @@ class CanvasTools:
         Returns:
             Assignment details dictionary
         """
-        async with self.get_canvas_session() as session:
-            result = await session.call_tool(
-                "canvas_get_assignment",
-                arguments={
-                    "course_id": course_id,
-                    "assignment_id": assignment_id
-                }
-            )
-            if hasattr(result, 'content') and len(result.content) > 0:
-                content = result.content[0]
-                if hasattr(content, 'text'):
-                    return json.loads(content.text)
-            return None
+        assignments = await self.get_course_assignments(course_id)
+        for assignment in assignments:
+            if str(assignment.get("id")) == str(assignment_id):
+                return assignment
+        return None

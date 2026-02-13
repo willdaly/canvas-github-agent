@@ -15,7 +15,8 @@ class GitHubTools:
     def __init__(self):
         self.github_token = os.getenv("GITHUB_TOKEN")
         self.github_username = os.getenv("GITHUB_USERNAME")
-        self.github_org = os.getenv("GITHUB_ORG", "")
+        _org = os.getenv("GITHUB_ORG", "").strip()
+        self.github_org = _org if _org and not _org.startswith("#") else ""
         
     @asynccontextmanager
     async def get_github_session(self):
@@ -62,15 +63,18 @@ class GitHubTools:
             # - github_create_repository
             # We'll try the most common pattern
             try:
+                args = {
+                    "name": name,
+                    "description": description,
+                    "private": private,
+                    "auto_init": auto_init,
+                }
+                # Only pass owner when creating in an org (not for personal repos)
+                if self.github_org:
+                    args["owner"] = self.github_org
                 result = await session.call_tool(
                     "create_repository",
-                    arguments={
-                        "name": name,
-                        "description": description,
-                        "private": private,
-                        "auto_init": auto_init,
-                        "owner": self.github_org if self.github_org else self.github_username
-                    }
+                    arguments=args
                 )
                 if hasattr(result, 'content') and len(result.content) > 0:
                     content = result.content[0]
