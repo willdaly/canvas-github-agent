@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch, AsyncMock
 from templates import (
     generate_starter_files,
     get_template_for_language,
+    normalize_slug,
     PYTHON_TEMPLATES,
     JAVA_TEMPLATES,
     JAVASCRIPT_TEMPLATES,
@@ -133,6 +134,23 @@ class TestTemplates:
         
         # Check that the slug is used in package.json
         assert "my-test-assignment" in files["package.json"]
+    
+    def test_normalize_slug_basic(self):
+        """Test basic slug normalization."""
+        assert normalize_slug("My Test") == "my-test"
+        assert normalize_slug("Hello World!") == "hello-world"
+        
+    def test_normalize_slug_special_chars(self):
+        """Test slug normalization with special characters."""
+        assert normalize_slug("My!! Test") == "my-test"
+        assert normalize_slug("Test___Name") == "test-name"
+        assert normalize_slug("A@#$%B") == "a-b"
+        
+    def test_normalize_slug_edge_cases(self):
+        """Test slug normalization edge cases."""
+        assert normalize_slug("!!!Test!!!") == "test"
+        assert normalize_slug("---Test---") == "test"
+        assert normalize_slug("Test   With   Spaces") == "test-with-spaces"
 
 
 class TestCanvasTools:

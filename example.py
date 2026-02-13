@@ -79,15 +79,19 @@ async def example_workflow():
 async def quick_create_example():
     """
     Quick example: Create a repository directly if you know the course and assignment IDs.
+    
+    NOTE: Replace the values below with your actual Canvas course and assignment IDs
+    before running this function.
     """
-    # Replace these with your actual IDs
-    COURSE_ID = 12345  # Your Canvas course ID
-    ASSIGNMENT_ID = 67890  # Your Canvas assignment ID (optional)
-    LANGUAGE = "python"  # python, java, javascript, or cpp
+    # TODO: Replace these with your actual IDs from Canvas
+    COURSE_ID = 12345  # Replace with your Canvas course ID (e.g., from list-courses)
+    ASSIGNMENT_ID = 67890  # Replace with Canvas assignment ID, or set to None for next upcoming
+    LANGUAGE = "python"  # Choose: python, java, javascript, or cpp
     
     print("Quick Create Example")
     print("=" * 80)
     print(f"Creating repository for course {COURSE_ID}")
+    print("\nNOTE: Make sure to update COURSE_ID and ASSIGNMENT_ID with real values!")
     
     agent = CanvasGitHubAgent()
     result = await agent.run(

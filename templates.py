@@ -1,6 +1,27 @@
 """
 Starter code templates for different types of assignments.
 """
+import re
+
+
+def normalize_slug(name: str) -> str:
+    """
+    Convert a name to a valid slug for repository names.
+    
+    Args:
+        name: The assignment or project name
+        
+    Returns:
+        A normalized slug suitable for repository names
+    """
+    # Convert to lowercase
+    slug = name.lower()
+    # Replace any sequence of non-alphanumeric characters with a single hyphen
+    slug = re.sub(r'[^a-z0-9]+', '-', slug)
+    # Strip leading/trailing hyphens
+    slug = slug.strip('-')
+    return slug
+
 
 PYTHON_TEMPLATES = {
     "README.md": """# {assignment_name}
@@ -354,7 +375,7 @@ def generate_starter_files(
         Dictionary mapping file paths to their content
     """
     template = get_template_for_language(language)
-    assignment_slug = assignment_name.lower().replace(" ", "-").replace("_", "-")
+    assignment_slug = normalize_slug(assignment_name)
     
     files = {}
     for filepath, content_template in template.items():

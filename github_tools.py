@@ -77,7 +77,7 @@ class GitHubTools:
                     if hasattr(content, 'text'):
                         return json.loads(content.text)
             except Exception as e:
-                print(f"Error creating repository: {e}")
+                print(f"Error creating repository '{name}': {e}")
             return None
     
     async def create_file(
@@ -118,7 +118,7 @@ class GitHubTools:
                 )
                 return True
             except Exception as e:
-                print(f"Error creating file: {e}")
+                print(f"Error creating file '{path}' in {owner}/{repo}: {e}")
                 return False
     
     async def create_directory_structure(

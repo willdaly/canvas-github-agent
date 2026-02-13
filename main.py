@@ -6,13 +6,15 @@ with appropriate starter code and file structure.
 """
 import os
 import asyncio
+import re
 from datetime import datetime
+from dateutil import parser as dateutil_parser
 from typing import Optional
 from dotenv import load_dotenv
 from crewai import Agent, Task, Crew, Process
 from canvas_tools import CanvasTools
 from github_tools import GitHubTools
-from templates import generate_starter_files
+from templates import generate_starter_files, normalize_slug
 
 
 # Load environment variables
@@ -87,15 +89,19 @@ class CanvasGitHubAgent:
             
             # Sort by due date and get the next upcoming assignment
             now = datetime.now()
-            upcoming = [
-                a for a in assignments
-                if a.get("due_at") and datetime.fromisoformat(
-                    a["due_at"].replace("Z", "+00:00")
-                ) > now
-            ]
+            upcoming = []
+            for a in assignments:
+                if a.get("due_at"):
+                    try:
+                        due_date = dateutil_parser.parse(a["due_at"])
+                        if due_date > now:
+                            upcoming.append(a)
+                    except (ValueError, TypeError):
+                        # Skip assignments with invalid due dates
+                        continue
             
             if upcoming:
-                upcoming.sort(key=lambda x: x.get("due_at", ""))
+                upcoming.sort(key=lambda x: dateutil_parser.parse(x["due_at"]))
                 return upcoming[0]
             else:
                 # If no upcoming assignments, return the most recent one
@@ -122,13 +128,11 @@ class CanvasGitHubAgent:
         due_at = assignment.get("due_at", "No due date")
         
         # Clean up the description (remove HTML tags if present)
-        import re
         clean_description = re.sub(r'<[^>]+>', '', assignment_description)
         clean_description = clean_description.strip()[:200]  # Limit length
         
-        # Create a slug for the repo name
-        repo_name = assignment_name.lower().replace(" ", "-").replace("_", "-")
-        repo_name = re.sub(r'[^a-z0-9-]', '', repo_name)
+        # Create a slug for the repo name using shared utility
+        repo_name = normalize_slug(assignment_name)
         
         # Create the repository
         print(f"\nCreating repository: {repo_name}")
