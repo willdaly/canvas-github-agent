@@ -166,16 +166,21 @@ class CanvasGitHubAgent:
         # Create files in the repository
         owner = self.github_org if self.github_org else self.github_username
         print(f"\nAdding starter files to repository...")
-        await self.github_tools.create_directory_structure(
+        files_ok = await self.github_tools.create_directory_structure(
             owner=owner,
             repo=repo_name,
             files=starter_files
         )
         
+        if not files_ok:
+            print("\n⚠️  Some files failed to upload. Check that your GitHub token")
+            print("   has 'Contents: Read and write' permission.")
+        
         return {
             "repository": repo,
             "assignment": assignment,
-            "files_created": list(starter_files.keys())
+            "files_created": list(starter_files.keys()),
+            "files_uploaded": files_ok
         }
     
     async def run(
@@ -220,13 +225,17 @@ class CanvasGitHubAgent:
         owner = repo_info.get("owner", {}).get("login", self.github_username)
         repo_name = repo_info.get("name", "unknown")
         
-        print(f"\n✅ Repository created successfully!")
-        print(f"   Repository: https://github.com/{owner}/{repo_name}")
-        print(f"   Files created: {', '.join(result['files_created'])}")
-        
-        print("\n" + "=" * 80)
-        print("✨ Done! Your assignment repository is ready.")
-        print("=" * 80)
+        if result.get("files_uploaded", False):
+            print(f"\n✅ Repository created successfully!")
+            print(f"   Repository: https://github.com/{owner}/{repo_name}")
+            print(f"   Files created: {', '.join(result['files_created'])}")
+            print("\n" + "=" * 80)
+            print("✨ Done! Your assignment repository is ready.")
+            print("=" * 80)
+        else:
+            print(f"\n⚠️  Repository created but files failed to upload.")
+            print(f"   Repository: https://github.com/{owner}/{repo_name}")
+            print(f"   Make sure your GitHub token has 'Contents: Read and write' permission.")
         
         return result
 
