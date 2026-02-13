@@ -61,6 +61,22 @@ Edit `.env` and add your credentials:
 
 ## Usage
 
+### Interactive Mode (Easiest)
+
+For the simplest experience, use the interactive CLI:
+
+```bash
+python cli.py
+```
+
+This will guide you through:
+1. Selecting a course
+2. Choosing an assignment
+3. Picking a programming language
+4. Creating the repository
+
+### Command-Line Mode
+
 ### List Your Canvas Courses
 
 ```bash
