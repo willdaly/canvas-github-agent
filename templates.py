@@ -320,9 +320,17 @@ def get_template_for_language(language: str) -> dict:
         Dictionary of file templates
     """
     language_lower = language.lower()
-    for key, template in TEMPLATE_MAP.items():
+    
+    # First, try exact match
+    if language_lower in TEMPLATE_MAP:
+        return TEMPLATE_MAP[language_lower]
+    
+    # Then try partial match, but prioritize longer keys to avoid "java" matching "javascript"
+    sorted_keys = sorted(TEMPLATE_MAP.keys(), key=len, reverse=True)
+    for key in sorted_keys:
         if key in language_lower:
-            return template
+            return TEMPLATE_MAP[key]
+    
     # Default to Python if no match
     return PYTHON_TEMPLATES
 
