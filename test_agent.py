@@ -9,6 +9,9 @@ from unittest.mock import Mock, patch, AsyncMock
 from templates import (
     generate_starter_files,
     get_template_for_language,
+    build_agent_fact_card,
+    extract_required_filenames,
+    extract_required_function_names,
     normalize_slug,
     PYTHON_TEMPLATES,
     JAVA_TEMPLATES,
@@ -64,6 +67,7 @@ class TestTemplates:
         
         # Check that expected files are present
         assert "README.md" in files
+        assert "ASSIGNMENT.md" in files
         assert "requirements.txt" in files
         assert "main.py" in files
         assert "tests/test_main.py" in files
@@ -72,6 +76,7 @@ class TestTemplates:
         # Check that content is properly formatted
         assert "Test Assignment" in files["README.md"]
         assert "2024-12-31" in files["README.md"]
+        assert "This is a test assignment" in files["ASSIGNMENT.md"]
         assert "This is a test assignment" in files["main.py"]
         
     def test_generate_starter_files_java(self):
@@ -84,6 +89,7 @@ class TestTemplates:
         )
         
         assert "README.md" in files
+        assert "ASSIGNMENT.md" in files
         assert "Main.java" in files
         assert "Test.java" in files
         assert ".gitignore" in files
@@ -100,6 +106,7 @@ class TestTemplates:
         )
         
         assert "README.md" in files
+        assert "ASSIGNMENT.md" in files
         assert "package.json" in files
         assert "index.js" in files
         assert "index.test.js" in files
@@ -117,6 +124,7 @@ class TestTemplates:
         )
         
         assert "README.md" in files
+        assert "ASSIGNMENT.md" in files
         assert "main.cpp" in files
         assert "test.cpp" in files
         assert ".gitignore" in files
@@ -151,6 +159,69 @@ class TestTemplates:
         assert normalize_slug("!!!Test!!!") == "test"
         assert normalize_slug("---Test---") == "test"
         assert normalize_slug("Test   With   Spaces") == "test-with-spaces"
+
+    def test_build_agent_fact_card(self):
+        """Test creation of a provisional agent fact card payload."""
+        fact_card = build_agent_fact_card(
+            agent_id="My Agent",
+            agent_name="My Agent",
+            summary="Helps create repos",
+            domain="education",
+            capabilities=["create_repo", "generate_files"],
+            registry_url="https://index.projectnanda.org",
+            source_repository="https://github.com/example/my-agent",
+            metadata={"course": "CS5500"},
+        )
+
+        assert fact_card["schema_version"] == "0.1-draft"
+        assert fact_card["agent_id"] == "my-agent"
+        assert fact_card["name"] == "My Agent"
+        assert fact_card["registry"]["url"] == "https://index.projectnanda.org"
+        assert fact_card["metadata"]["course"] == "CS5500"
+
+    def test_extract_required_filenames(self):
+        """Extract explicit filenames from assignment instructions."""
+        text = (
+            "This file must be named maze_solvers.py. "
+            "Initialize `maze.txt` and include a report in Report.md."
+        )
+        files = extract_required_filenames(text)
+        assert "maze_solvers.py" in files
+        assert "maze.txt" in files
+        assert "Report.md" in files
+
+    def test_extract_required_function_names(self):
+        """Extract required function names from assignment examples."""
+        text = (
+            "The file must include the function names: maze_solver_one, "
+            "maze_solver_two and maze_solver_three. "
+            "solution = maze_solver_one(maze)"
+        )
+        function_names = extract_required_function_names(text)
+        assert "maze_solver_one" in function_names
+
+    def test_assignment_specific_scaffold_files(self):
+        """Generate requested files and solver stubs from assignment brief."""
+        assignment_description = (
+            "The file must be named maze_solvers.py. "
+            "The file must include the function names: maze_solver_one, "
+            "maze_solver_two and maze_solver_three. "
+            "The maze will be stored as a text file. "
+            "When you submit all code, include a README file and a report."
+        )
+        files = generate_starter_files(
+            assignment_name="Maze Search Implementation",
+            assignment_description=assignment_description,
+            due_date="2026-03-11",
+            language="python",
+        )
+
+        assert "maze_solvers.py" in files
+        assert "def maze_solver_one(maze):" in files["maze_solvers.py"]
+        assert "def maze_solver_two(maze):" in files["maze_solvers.py"]
+        assert "def maze_solver_three(maze):" in files["maze_solvers.py"]
+        assert "maze.txt" in files
+        assert "Report.md" in files
 
 
 class TestCanvasTools:

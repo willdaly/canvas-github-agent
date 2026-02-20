@@ -2,7 +2,76 @@
 Starter code templates for different types of assignments.
 """
 import re
+from html import unescape
+from typing import Any, Dict, List, Optional
 
+
+def html_to_markdown(html: str) -> str:
+    """
+    Convert HTML assignment content to readable Markdown.
+
+    Handles common Canvas HTML patterns: headings, paragraphs, lists,
+    bold/italic, links, code blocks, and tables.
+    """
+    if not html:
+        return ""
+
+    text = html
+
+    # Decode HTML entities
+    text = unescape(text)
+
+    # Remove <style> and <link> tags and their content
+    text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL)
+    text = re.sub(r'<link[^>]*/?>', '', text)
+
+    # Headings
+    for i in range(1, 7):
+        text = re.sub(
+            rf'<h{i}[^>]*>(.*?)</h{i}>',
+            lambda m, lvl=i: f"\n{'#' * lvl} {m.group(1).strip()}\n",
+            text, flags=re.DOTALL,
+        )
+
+    # Bold / italic
+    text = re.sub(r'<(strong|b)>(.*?)</\1>', r'**\2**', text, flags=re.DOTALL)
+    text = re.sub(r'<(em|i)>(.*?)</\1>', r'*\2*', text, flags=re.DOTALL)
+
+    # Code blocks
+    text = re.sub(r'<pre[^>]*><code[^>]*>(.*?)</code></pre>', r'\n```\n\1\n```\n', text, flags=re.DOTALL)
+    text = re.sub(r'<code>(.*?)</code>', r'`\1`', text, flags=re.DOTALL)
+
+    # Links
+    text = re.sub(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', r'[\2](\1)', text, flags=re.DOTALL)
+
+    # Images
+    text = re.sub(r'<img[^>]+src="([^"]+)"[^>]*alt="([^"]*)"[^>]*/?>',  r'![\2](\1)', text)
+    text = re.sub(r'<img[^>]+src="([^"]+)"[^>]*/?>',  r'![image](\1)', text)
+
+    # Lists
+    text = re.sub(r'<li[^>]*>(.*?)</li>', r'- \1', text, flags=re.DOTALL)
+    text = re.sub(r'</?[ou]l[^>]*>', '\n', text)
+
+    # Paragraphs and line breaks
+    text = re.sub(r'<br\s*/?>', '\n', text)
+    text = re.sub(r'<p[^>]*>(.*?)</p>', r'\n\1\n', text, flags=re.DOTALL)
+    text = re.sub(r'<hr\s*/?>', '\n---\n', text)
+
+    # Table support (basic)
+    text = re.sub(r'<tr[^>]*>(.*?)</tr>', lambda m: '| ' + m.group(1) + '\n', text, flags=re.DOTALL)
+    text = re.sub(r'<t[hd][^>]*>(.*?)</t[hd]>', r'\1 | ', text, flags=re.DOTALL)
+    text = re.sub(r'</?table[^>]*>', '\n', text)
+    text = re.sub(r'</?thead[^>]*>', '', text)
+    text = re.sub(r'</?tbody[^>]*>', '', text)
+
+    # Strip remaining tags
+    text = re.sub(r'<[^>]+>', '', text)
+
+    # Clean up whitespace
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = text.strip()
+
+    return text
 
 def normalize_slug(name: str) -> str:
     """
@@ -26,8 +95,11 @@ def normalize_slug(name: str) -> str:
 PYTHON_TEMPLATES = {
     "README.md": """# {assignment_name}
 
-## Description
-{assignment_description}
+## Overview
+This repository contains starter code for this assignment.
+
+## Full Assignment
+See `ASSIGNMENT.md` for the complete assignment brief.
 
 ## Due Date
 {due_date}
@@ -95,8 +167,11 @@ env/
 JAVA_TEMPLATES = {
     "README.md": """# {assignment_name}
 
-## Description
-{assignment_description}
+## Overview
+This repository contains starter code for this assignment.
+
+## Full Assignment
+See `ASSIGNMENT.md` for the complete assignment brief.
 
 ## Due Date
 {due_date}
@@ -165,8 +240,11 @@ build/
 JAVASCRIPT_TEMPLATES = {
     "README.md": """# {assignment_name}
 
-## Description
-{assignment_description}
+## Overview
+This repository contains starter code for this assignment.
+
+## Full Assignment
+See `ASSIGNMENT.md` for the complete assignment brief.
 
 ## Due Date
 {due_date}
@@ -248,8 +326,11 @@ dist/
 CPP_TEMPLATES = {
     "README.md": """# {assignment_name}
 
-## Description
-{assignment_description}
+## Overview
+This repository contains starter code for this assignment.
+
+## Full Assignment
+See `ASSIGNMENT.md` for the complete assignment brief.
 
 ## Due Date
 {due_date}
@@ -356,20 +437,183 @@ def get_template_for_language(language: str) -> dict:
     return PYTHON_TEMPLATES
 
 
+def build_agent_fact_card(
+    agent_id: str,
+    agent_name: str,
+    summary: str,
+    domain: str,
+    capabilities: List[str],
+    registry_url: str = "",
+    source_repository: str = "",
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Build a provisional NANDA/NEST Agent Fact Card payload.
+
+    This schema is intentionally minimal until the official registry schema is
+    confirmed. It captures assignment-aligned metadata and interoperability hints.
+    """
+    clean_capabilities = [c for c in capabilities if c]
+    return {
+        "schema_version": "0.1-draft",
+        "agent_id": normalize_slug(agent_id),
+        "name": agent_name,
+        "summary": summary,
+        "domain": domain,
+        "capabilities": clean_capabilities,
+        "interoperability": {
+            "a2a": "@agent-id",
+            "mcp": "#registry:server-name",
+        },
+        "registry": {
+            "url": registry_url,
+            "status": "not_registered",
+        },
+        "source_repository": source_repository,
+        "metadata": metadata or {},
+    }
+
+
+def extract_required_filenames(assignment_description: str) -> List[str]:
+    """Extract explicit required filenames from assignment text."""
+    if not assignment_description:
+        return []
+
+    text = assignment_description
+    filenames: List[str] = []
+
+    explicit_patterns = [
+        r"must be named\s+([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)",
+        r"file called\s+`?([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)`?",
+        r"include\s+a\s+file\s+named\s+`?([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)`?",
+    ]
+    for pattern in explicit_patterns:
+        for match in re.findall(pattern, text, flags=re.IGNORECASE):
+            filenames.append(match.strip())
+
+    for match in re.findall(r"`([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)`", text):
+        filenames.append(match.strip())
+
+    common_ext_pattern = (
+        r"\b([A-Za-z0-9_./-]+\."
+        r"(?:py|txt|md|json|ya?ml|csv|java|js|cpp|cxx|cc|h|hpp))\b"
+    )
+    for match in re.findall(common_ext_pattern, text, flags=re.IGNORECASE):
+        filenames.append(match.strip())
+
+    unique: List[str] = []
+    seen = set()
+    for filename in filenames:
+        key = filename.lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(filename)
+    return unique
+
+
+def extract_required_function_names(assignment_description: str) -> List[str]:
+    """Extract required function names from assignment text."""
+    if not assignment_description:
+        return []
+
+    names = re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", assignment_description)
+    filtered = []
+    seen = set()
+    for name in names:
+        lower = name.lower()
+        if name.startswith("__"):
+            continue
+        if lower in {"solution", "print", "main"}:
+            continue
+        if name not in seen:
+            seen.add(name)
+            filtered.append(name)
+    return filtered
+
+
+def build_assignment_specific_files(
+    assignment_name: str,
+    assignment_description: str,
+    language: str,
+) -> Dict[str, str]:
+    """Generate files that are explicitly requested by assignment instructions."""
+    if language.lower() not in {"python", "py"}:
+        return {}
+
+    files: Dict[str, str] = {}
+    requested_files = extract_required_filenames(assignment_description)
+    requested_functions = extract_required_function_names(assignment_description)
+
+    requested_lower = {path.lower() for path in requested_files}
+
+    if "maze_solvers.py" in requested_lower:
+        maze_functions = [
+            name for name in requested_functions
+            if name.startswith("maze_solver_") or name in {
+                "maze_solver_one",
+                "maze_solver_two",
+                "maze_solver_three",
+            }
+        ]
+        if not maze_functions:
+            maze_functions = ["maze_solver_one", "maze_solver_two", "maze_solver_three"]
+
+        function_blocks = []
+        for function_name in maze_functions:
+            function_blocks.append(
+                f"def {function_name}(maze):\n"
+                "    \"\"\"Solve the maze and return the solved maze output.\"\"\"\n"
+                "    return maze\n"
+            )
+
+        files["maze_solvers.py"] = (
+            f'"""{assignment_name} maze solver interface."""\n\n' +
+            "\n\n".join(function_blocks) +
+            "\n"
+        )
+
+    if "maze.txt" in requested_lower or "maze" in assignment_description.lower():
+        files["maze.txt"] = (
+            "10 6\n"
+            "XXXXXXXXXX\n"
+            "X        S\n"
+            "X XXXXXX X\n"
+            "X X    XXX\n"
+            "X   XX   E\n"
+            "XXXXXXXXXX\n"
+        )
+
+    if "report.md" in requested_lower or "report" in assignment_description.lower():
+        files["Report.md"] = (
+            f"# {assignment_name} Report\n\n"
+            "## Introduction to Search Algorithms\n\n"
+            "## Selected Algorithms\n\n"
+            "## Heuristics Used\n\n"
+            "## Performance Comparison\n\n"
+            "## Optimality, Time, and Space Analysis\n\n"
+            "## Maze Variations and Performance Impact\n\n"
+            "## Real-life Application\n"
+        )
+
+    return files
+
+
 def generate_starter_files(
     assignment_name: str,
     assignment_description: str,
     due_date: str,
-    language: str = "python"
+    language: str = "python",
+    short_description: str = "",
 ) -> dict:
     """
     Generate starter files for an assignment.
     
     Args:
         assignment_name: Name of the assignment
-        assignment_description: Description of the assignment
+        assignment_description: Full assignment description (Markdown) for README
         due_date: Due date string
         language: Programming language
+        short_description: Brief plain-text description for code file comments
         
     Returns:
         Dictionary mapping file paths to their content
@@ -377,14 +621,33 @@ def generate_starter_files(
     template = get_template_for_language(language)
     assignment_slug = normalize_slug(assignment_name)
     
+    if not short_description:
+        short_description = assignment_description[:200]
+    
     files = {}
     for filepath, content_template in template.items():
         content = content_template.format(
             assignment_name=assignment_name,
-            assignment_description=assignment_description,
+            assignment_description=short_description,
             due_date=due_date,
             assignment_slug=assignment_slug
         )
         files[filepath] = content
+
+    files["ASSIGNMENT.md"] = (
+        f"# {assignment_name}\n\n"
+        "## Full Assignment Brief\n"
+        f"{assignment_description}\n\n"
+        "## Due Date\n"
+        f"{due_date}\n"
+    )
+
+    files.update(
+        build_assignment_specific_files(
+            assignment_name=assignment_name,
+            assignment_description=assignment_description,
+            language=language,
+        )
+    )
     
     return files
