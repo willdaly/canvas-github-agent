@@ -5,6 +5,7 @@ Note: These tests require valid Canvas and GitHub credentials to run fully.
 Mock tests are provided for basic functionality validation.
 """
 import pytest
+import asyncio
 from unittest.mock import Mock, patch, AsyncMock
 from templates import (
     generate_starter_files,
@@ -227,8 +228,7 @@ class TestTemplates:
 class TestCanvasTools:
     """Test Canvas tools (mock tests)."""
     
-    @pytest.mark.asyncio
-    async def test_canvas_tools_initialization(self):
+    def test_canvas_tools_initialization(self):
         """Test that CanvasTools initializes correctly."""
         from canvas_tools import CanvasTools
         
@@ -244,8 +244,7 @@ class TestCanvasTools:
 class TestGitHubTools:
     """Test GitHub tools (mock tests)."""
     
-    @pytest.mark.asyncio
-    async def test_github_tools_initialization(self):
+    def test_github_tools_initialization(self):
         """Test that GitHubTools initializes correctly."""
         from github_tools import GitHubTools
         
@@ -301,6 +300,123 @@ class TestCanvasGitHubAgent:
             agent = CanvasGitHubAgent()
             initializer = agent.create_repository_initializer_agent()
             assert initializer.role == "Repository Initializer"
+
+    def test_infer_assignment_type_coding(self):
+        """Infer coding assignment from assignment text."""
+        from main import CanvasGitHubAgent
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_TOKEN': 'test_token',
+            'GITHUB_TOKEN': 'test_gh_token',
+            'GITHUB_USERNAME': 'testuser'
+        }):
+            agent = CanvasGitHubAgent()
+            assignment = {
+                "name": "Implement Graph Search in Python",
+                "description": "Write code, run tests, and submit a GitHub repository."
+            }
+            assert agent.infer_assignment_type(assignment) == "coding"
+
+    def test_infer_assignment_type_writing(self):
+        """Infer writing assignment from assignment text."""
+        from main import CanvasGitHubAgent
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_TOKEN': 'test_token',
+            'GITHUB_TOKEN': 'test_gh_token',
+            'GITHUB_USERNAME': 'testuser'
+        }):
+            agent = CanvasGitHubAgent()
+            assignment = {
+                "name": "Critical Reflection Essay",
+                "description": "Write a 1200-word essay in APA format with citations."
+            }
+            assert agent.infer_assignment_type(assignment) == "writing"
+
+    def test_run_routes_coding_to_github(self):
+        """Run routes coding assignments to GitHub creation path."""
+        from main import CanvasGitHubAgent
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_TOKEN': 'test_token',
+            'GITHUB_TOKEN': 'test_gh_token',
+            'GITHUB_USERNAME': 'testuser'
+        }):
+            agent = CanvasGitHubAgent()
+            assignment = {
+                "name": "Coding Assignment",
+                "description": "Implement and test a function",
+                "due_at": "2026-03-01"
+            }
+
+            agent.create_repository_task = AsyncMock(return_value={
+                "repository": {"name": "coding-assignment", "owner": {"login": "testuser"}},
+                "files_created": ["README.md"],
+                "assignment": assignment,
+            })
+            agent.create_notion_page_task = AsyncMock(return_value=None)
+
+            result = asyncio.run(
+                agent.run(
+                    course_id=123,
+                    assignment_data=assignment,
+                    assignment_type="coding",
+                )
+            )
+
+            agent.create_repository_task.assert_awaited_once()
+            agent.create_notion_page_task.assert_not_awaited()
+            assert result["destination"] == "github"
+
+    def test_run_routes_writing_to_notion(self):
+        """Run routes writing assignments to Notion page creation path."""
+        from main import CanvasGitHubAgent
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_TOKEN': 'test_token',
+            'GITHUB_TOKEN': 'test_gh_token',
+            'GITHUB_USERNAME': 'testuser'
+        }):
+            agent = CanvasGitHubAgent()
+            assignment = {
+                "name": "Writing Assignment",
+                "description": "Write a reflection paper",
+                "due_at": "2026-03-01"
+            }
+
+            agent.create_repository_task = AsyncMock(return_value=None)
+            agent.create_notion_page_task = AsyncMock(return_value={
+                "page": {"url": "https://notion.so/example"},
+                "assignment": assignment,
+            })
+
+            result = asyncio.run(
+                agent.run(
+                    course_id=123,
+                    assignment_data=assignment,
+                    assignment_type="writing",
+                )
+            )
+
+            agent.create_repository_task.assert_not_awaited()
+            agent.create_notion_page_task.assert_awaited_once()
+            assert result["destination"] == "notion"
+
+
+class TestNotionTools:
+    """Test Notion tools initialization."""
+
+    def test_notion_tools_initialization(self):
+        """Test that NotionTools initializes correctly."""
+        from notion_tools import NotionTools
+
+        with patch.dict('os.environ', {
+            'NOTION_TOKEN': 'test_notion_token',
+            'NOTION_PARENT_PAGE_ID': 'test_page_id'
+        }):
+            tools = NotionTools()
+            assert tools.notion_token == 'test_notion_token'
+            assert tools.parent_page_id == 'test_page_id'
 
 
 if __name__ == "__main__":

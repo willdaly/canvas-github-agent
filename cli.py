@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Simple CLI wrapper for Canvas-GitHub Agent
-Makes it easy to quickly create repos without remembering command syntax
+Simple CLI wrapper for Canvas Assignment Agent
+Creates GitHub repositories for coding assignments and Notion pages for writing assignments.
 """
 import sys
 import asyncio
@@ -11,9 +11,9 @@ from main import CanvasGitHubAgent, list_courses, list_course_assignments
 async def interactive_mode():
     """Run in interactive mode with prompts."""
     print("=" * 80)
-    print("Canvas-GitHub Agent - Interactive Mode")
+    print("Canvas Assignment Agent - Interactive Mode")
     print("=" * 80)
-    print("\nThis tool helps you create GitHub repositories from Canvas assignments.\n")
+    print("\nThis tool creates a GitHub repo (coding) or Notion page (writing) from Canvas assignments.\n")
     
     # List courses
     print("Fetching your Canvas courses...\n")
@@ -57,12 +57,37 @@ async def interactive_mode():
     }
     language = language_map.get(lang_input, "python")
     
+    # Pre-fetch assignment for type inference and confirmation
+    agent = CanvasGitHubAgent()
+    assignment = await agent.fetch_assignment_task(course_id, assignment_id)
+    inferred_type = agent.infer_assignment_type(assignment)
+
+    print(f"\nDetected assignment: {assignment.get('name', 'Unknown')}")
+    print(f"Inferred assignment type: {inferred_type}")
+
+    while True:
+        assignment_type_input = input(
+            "Confirm assignment type ([c]oding/[w]riting, Enter to accept inferred): "
+        ).strip().lower()
+        if assignment_type_input == "":
+            assignment_type = inferred_type
+            break
+        if assignment_type_input in {"c", "coding"}:
+            assignment_type = "coding"
+            break
+        if assignment_type_input in {"w", "writing"}:
+            assignment_type = "writing"
+            break
+        print("❌ Please enter 'c', 'w', 'coding', 'writing', or press Enter.")
+
     # Confirm
     print("\n" + "=" * 80)
-    print("Ready to create repository:")
+    print("Ready to process assignment:")
     print(f"  Course ID: {course_id}")
     print(f"  Assignment ID: {assignment_id if assignment_id else 'Next upcoming'}")
-    print(f"  Language: {language}")
+    print(f"  Assignment Type: {assignment_type}")
+    if assignment_type == "coding":
+        print(f"  Language: {language}")
     print("=" * 80)
     
     confirm = input("\nProceed? (y/n): ").strip().lower()
@@ -70,16 +95,21 @@ async def interactive_mode():
         print("Cancelled.")
         return
     
-    # Create repository
-    agent = CanvasGitHubAgent()
+    # Process assignment (GitHub repo for coding, Notion page for writing)
     print("\n")
-    await agent.run(course_id=course_id, assignment_id=assignment_id, language=language)
+    await agent.run(
+        course_id=course_id,
+        assignment_id=assignment_id,
+        language=language,
+        assignment_type=assignment_type,
+        assignment_data=assignment,
+    )
 
 
 def print_usage():
     """Print usage information."""
     print("""
-Canvas-GitHub Agent - Quick Start
+Canvas Assignment Agent - Quick Start
 
 Usage:
   python cli.py                              Run in interactive mode
@@ -88,7 +118,8 @@ Usage:
 See main.py for advanced command-line options:
   python main.py list-courses                List all your Canvas courses
   python main.py list-assignments --course-id 12345
-  python main.py create-repo --course-id 12345 --language python
+    python main.py create-repo --course-id 12345 --language python
+    python main.py create-repo --course-id 12345 --confirm-type
   
 For more information, see README.md
 """)

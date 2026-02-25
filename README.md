@@ -1,11 +1,13 @@
-# Canvas-GitHub Agent
+# Canvas Assignment Agent
 
-A CrewAI-powered agent that automatically fetches assignments from Canvas LMS using [canvas-mcp](https://smithery.ai/servers/aryankeluskar/canvas-mcp) and creates GitHub repositories with helpful file structure and starter code using GitHub MCP.
+A CrewAI-powered agent that automatically fetches assignments from Canvas LMS using [canvas-mcp](https://smithery.ai/servers/aryankeluskar/canvas-mcp), then routes to GitHub or Notion based on assignment type.
 
 ## Features
 
 - 🎓 **Canvas Integration**: Fetch assignments directly from your Canvas LMS courses
-- 🚀 **Automated Repository Creation**: Create GitHub repositories with one command
+- 🧭 **Smart Assignment Routing**: Detect coding vs writing assignments from assignment text
+- 🚀 **Automated Repository Creation**: Create GitHub repositories for coding assignments
+- 📝 **Notion Integration**: Create Notion pages for writing assignments
 - 📁 **Smart Starter Code**: Generate language-specific project scaffolding
 - 🔧 **Multiple Languages**: Support for Python, Java, JavaScript, and C++
 - 📝 **README Generation**: Auto-generate README with assignment details and due dates
@@ -41,6 +43,8 @@ Edit `.env` and add your credentials:
 - `CANVAS_API_TOKEN`: Your Canvas API token
 - `GITHUB_TOKEN`: Your GitHub Personal Access Token
 - `GITHUB_USERNAME`: Your GitHub username
+- `NOTION_TOKEN`: Your Notion integration token (required for writing assignment routing)
+- `NOTION_PARENT_PAGE_ID`: Parent page ID where writing assignment pages are created
 - `OPENAI_API_KEY`: Your OpenAI API key (for CrewAI)
 
 ### Getting Canvas API Token
@@ -73,7 +77,8 @@ This will guide you through:
 1. Selecting a course
 2. Choosing an assignment
 3. Picking a programming language
-4. Creating the repository
+4. Confirming assignment type (coding/writing)
+5. Creating a GitHub repo (coding) or Notion page (writing)
 
 ### Command-Line Mode
 
@@ -93,15 +98,15 @@ python main.py list-assignments --course-id 12345
 
 Replace `12345` with your actual course ID.
 
-### Create a Repository for an Assignment
+### Create a Destination for an Assignment
 
-Create a repository for the next upcoming assignment:
+Create a destination for the next upcoming assignment:
 
 ```bash
 python main.py create-repo --course-id 12345
 ```
 
-Create a repository for a specific assignment:
+Create a destination for a specific assignment:
 
 ```bash
 python main.py create-repo --course-id 12345 --assignment-id 67890
@@ -118,6 +123,18 @@ Available languages:
 - `java`
 - `javascript`
 - `cpp`
+
+Override routing explicitly:
+
+```bash
+python main.py create-repo --course-id 12345 --assignment-type writing
+```
+
+Prompt to confirm inferred assignment type before creating destination:
+
+```bash
+python main.py create-repo --course-id 12345 --confirm-type
+```
 
 ## Generated Repository Structure
 

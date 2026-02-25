@@ -15,6 +15,7 @@ from crewai import Agent, Task, Crew, Process
 from canvas_tools import CanvasTools
 from github_tools import GitHubTools
 from templates import generate_starter_files, normalize_slug, html_to_markdown
+from notion_tools import NotionTools
 
 
 # Load environment variables
@@ -27,9 +28,66 @@ class CanvasGitHubAgent:
     def __init__(self):
         self.canvas_tools = CanvasTools()
         self.github_tools = GitHubTools()
+        self.notion_tools = NotionTools()
         self.github_username = os.getenv("GITHUB_USERNAME")
         _org = os.getenv("GITHUB_ORG", "").strip()
         self.github_org = _org if _org and not _org.startswith("#") else ""
+
+    @staticmethod
+    def strip_html(text: str) -> str:
+        """Remove HTML tags from assignment text."""
+        if not text:
+            return ""
+        return re.sub(r'<[^>]+>', '', text).strip()
+
+    def infer_assignment_type(self, assignment: dict) -> str:
+        """Infer whether an assignment is coding or writing based on content."""
+        assignment_name = assignment.get("name", "")
+        assignment_description = self.strip_html(assignment.get("description", ""))
+        text = f"{assignment_name} {assignment_description}".lower()
+
+        coding_keywords = {
+            "code", "coding", "program", "programming", "algorithm", "implement",
+            "function", "class", "method", "script", "compile", "run", "test",
+            "pytest", "java", "python", "javascript", "c++", "cpp", "repository",
+            "github", "git", "api", "software", "debug", "build"
+        }
+        writing_keywords = {
+            "essay", "paper", "reflection", "journal", "discussion", "thesis",
+            "annotated bibliography", "literature review", "report", "summary",
+            "argument", "draft", "citation", "mla", "apa", "writing", "paragraph"
+        }
+
+        coding_score = sum(1 for keyword in coding_keywords if keyword in text)
+        writing_score = sum(1 for keyword in writing_keywords if keyword in text)
+
+        return "coding" if coding_score >= writing_score else "writing"
+
+    def confirm_assignment_type(self, inferred_type: str) -> str:
+        """Prompt user to confirm or override inferred assignment type."""
+        while True:
+            response = input(
+                f"\nInferred assignment type: {inferred_type}. Confirm? "
+                "[c]oding/[w]riting (Enter to accept): "
+            ).strip().lower()
+
+            if response == "":
+                return inferred_type
+            if response in {"c", "coding"}:
+                return "coding"
+            if response in {"w", "writing"}:
+                return "writing"
+
+            print("❌ Please enter 'c', 'w', 'coding', 'writing', or press Enter.")
+
+    def validate_notion_config(self) -> list[str]:
+        """Return missing Notion environment variables required for writing flow."""
+        missing = []
+        if not os.getenv("NOTION_TOKEN", "").strip():
+            missing.append("NOTION_TOKEN")
+        if not os.getenv("NOTION_PARENT_PAGE_ID", "").strip():
+            missing.append("NOTION_PARENT_PAGE_ID")
+        return missing
         
     def create_assignment_fetcher_agent(self) -> Agent:
         """Create an agent responsible for fetching Canvas assignments."""
@@ -127,11 +185,11 @@ class CanvasGitHubAgent:
         assignment_name = assignment.get("name", "Assignment")
         assignment_description = assignment.get("description", "")
         due_at = assignment.get("due_at", "No due date")
-        
+
         # Convert HTML assignment content to Markdown for the README
         full_description = html_to_markdown(assignment_description)
         # Short plain-text version for GitHub repo description and code comments
-        short_description = re.sub(r'<[^>]+>', '', assignment_description).strip()[:200]
+        short_description = self.strip_html(assignment_description)[:200]
         
         # Create a slug for the repo name using shared utility
         repo_name = normalize_slug(assignment_name)
@@ -182,12 +240,39 @@ class CanvasGitHubAgent:
             "files_created": list(starter_files.keys()),
             "files_uploaded": files_ok
         }
+
+    async def create_notion_page_task(self, assignment: dict) -> Optional[dict]:
+        """Create a Notion page for a writing assignment."""
+        assignment_name = assignment.get("name", "Assignment")
+        assignment_description = self.strip_html(assignment.get("description", ""))
+        due_at = assignment.get("due_at", "No due date")
+
+        print(f"\nCreating Notion page for writing assignment: {assignment_name}")
+        page = await self.notion_tools.create_assignment_page(
+            title=assignment_name,
+            description=assignment_description,
+            due_date=due_at,
+        )
+
+        if not page:
+            print("\n❌ Failed to create Notion page. Possible causes:")
+            print("   - NOTION_TOKEN is missing or invalid")
+            print("   - NOTION_PARENT_PAGE_ID is missing or invalid")
+            return None
+
+        return {
+            "page": page,
+            "assignment": assignment,
+        }
     
     async def run(
         self,
         course_id: int,
         assignment_id: Optional[int] = None,
-        language: str = "python"
+        language: str = "python",
+        assignment_type: Optional[str] = None,
+        confirm_assignment_type: bool = False,
+        assignment_data: Optional[dict] = None,
     ):
         """
         Run the complete workflow.
@@ -196,6 +281,9 @@ class CanvasGitHubAgent:
             course_id: Canvas course ID
             assignment_id: Optional specific assignment ID
             language: Programming language for starter code
+            assignment_type: Optional explicit assignment type (coding/writing)
+            confirm_assignment_type: Whether to prompt user to confirm inferred type
+            assignment_data: Optional pre-fetched assignment details
         """
         print("=" * 80)
         print("Canvas-GitHub Agent")
@@ -203,7 +291,7 @@ class CanvasGitHubAgent:
         
         # Step 1: Fetch assignment from Canvas
         print(f"\n📚 Fetching assignment from Canvas (Course ID: {course_id})...")
-        assignment = await self.fetch_assignment_task(course_id, assignment_id)
+        assignment = assignment_data or await self.fetch_assignment_task(course_id, assignment_id)
         
         if not assignment:
             print("❌ No assignment found!")
@@ -212,30 +300,70 @@ class CanvasGitHubAgent:
         print(f"\n✅ Found assignment: {assignment.get('name')}")
         print(f"   Description: {assignment.get('description', 'N/A')[:100]}...")
         print(f"   Due date: {assignment.get('due_at', 'N/A')}")
+
+        # Step 2: Determine assignment type (coding vs writing)
+        if assignment_type not in {"coding", "writing"}:
+            assignment_type = self.infer_assignment_type(assignment)
+
+        if confirm_assignment_type:
+            assignment_type = self.confirm_assignment_type(assignment_type)
+
+        print(f"\n🧭 Assignment type selected: {assignment_type}")
         
-        # Step 2: Create GitHub repository with starter code
-        print(f"\n🚀 Creating GitHub repository with {language} starter code...")
-        result = await self.create_repository_task(assignment, language)
-        
-        if not result or "repository" not in result:
-            print("\n❌ Repository creation failed. See errors above.")
-            return None
-        
-        repo_info = result["repository"]
-        owner = repo_info.get("owner", {}).get("login", self.github_username)
-        repo_name = repo_info.get("name", "unknown")
-        
-        if result.get("files_uploaded", False):
-            print(f"\n✅ Repository created successfully!")
-            print(f"   Repository: https://github.com/{owner}/{repo_name}")
-            print(f"   Files created: {', '.join(result['files_created'])}")
-            print("\n" + "=" * 80)
-            print("✨ Done! Your assignment repository is ready.")
-            print("=" * 80)
+        if assignment_type == "coding":
+            # Step 3a: Create GitHub repository with starter code
+            print(f"\n🚀 Creating GitHub repository with {language} starter code...")
+            result = await self.create_repository_task(assignment, language)
+
+            if not result or "repository" not in result:
+                print("\n❌ Repository creation failed. See errors above.")
+                return None
+
+            repo_info = result["repository"]
+            owner = repo_info.get("owner", {}).get("login", self.github_username)
+            repo_name = repo_info.get("name", "unknown")
+
+            if result.get("files_uploaded", False):
+                print(f"\n✅ Repository created successfully!")
+                print(f"   Repository: https://github.com/{owner}/{repo_name}")
+                print(f"   Files created: {', '.join(result['files_created'])}")
+            else:
+                print(f"\n⚠️  Repository created but files failed to upload.")
+                print(f"   Repository: https://github.com/{owner}/{repo_name}")
+                print("   Make sure your GitHub token has 'Contents: Read and write' permission.")
+
+            result["destination"] = "github"
         else:
-            print(f"\n⚠️  Repository created but files failed to upload.")
-            print(f"   Repository: https://github.com/{owner}/{repo_name}")
-            print(f"   Make sure your GitHub token has 'Contents: Read and write' permission.")
+            # Step 3b: Create Notion page for writing assignment
+            missing_notion_config = self.validate_notion_config()
+            if missing_notion_config:
+                print("\n❌ Notion configuration is incomplete for writing assignments.")
+                print(f"   Missing: {', '.join(missing_notion_config)}")
+                print("   Set these values in your .env file and try again.")
+                print(
+                    "   NOTION_PARENT_PAGE_ID should be the page ID of a Notion page "
+                    "shared with your integration."
+                )
+                return None
+
+            print("\n📝 Creating Notion page for writing assignment...")
+            result = await self.create_notion_page_task(assignment)
+
+            if not result or "page" not in result:
+                print("\n❌ Notion page creation failed. See errors above.")
+                return None
+
+            page_url = result["page"].get("url", "N/A")
+            print("\n✅ Notion page created successfully!")
+            print(f"   Page URL: {page_url}")
+            result["destination"] = "notion"
+        
+        print("\n" + "=" * 80)
+        if assignment_type == "coding":
+            print("✨ Done! Your assignment repository is ready.")
+        else:
+            print("✨ Done! Your writing assignment Notion page is ready.")
+        print("=" * 80)
         
         return result
 
@@ -282,7 +410,10 @@ async def main():
     import argparse
     
     parser = argparse.ArgumentParser(
-        description="Canvas-GitHub Agent: Create GitHub repos from Canvas assignments"
+        description=(
+            "Canvas Assignment Agent: Create GitHub repos for coding assignments "
+            "or Notion pages for writing assignments"
+        )
     )
     parser.add_argument(
         "command",
@@ -305,6 +436,16 @@ async def main():
         choices=["python", "java", "javascript", "cpp"],
         help="Programming language for starter code (default: python)"
     )
+    parser.add_argument(
+        "--assignment-type",
+        choices=["coding", "writing"],
+        help="Override assignment type routing (coding or writing)"
+    )
+    parser.add_argument(
+        "--confirm-type",
+        action="store_true",
+        help="Prompt to confirm inferred assignment type before creating destination"
+    )
     
     args = parser.parse_args()
     
@@ -326,7 +467,9 @@ async def main():
         await agent.run(
             course_id=args.course_id,
             assignment_id=args.assignment_id,
-            language=args.language
+            language=args.language,
+            assignment_type=args.assignment_type,
+            confirm_assignment_type=args.confirm_type,
         )
 
 
