@@ -628,7 +628,7 @@ def generate_starter_files(
     for filepath, content_template in template.items():
         content = content_template.format(
             assignment_name=assignment_name,
-            assignment_description=short_description,
+            assignment_description=assignment_description if filepath == "README.md" else short_description,
             due_date=due_date,
             assignment_slug=assignment_slug
         )
