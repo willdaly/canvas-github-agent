@@ -96,6 +96,9 @@ async def handle_user_query(query, course_id=None, assignment_id=None):
 
     tool = select_tool(intent)
 
+    if tool is None:
+        return "Sorry, I cannot understand your request."
+
     data = await execute_tool(tool, course_id, assignment_id)
 
     response = generate_response(data)
