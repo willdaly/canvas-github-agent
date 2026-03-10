@@ -7,13 +7,15 @@ and returns a readable response.
 
 from canvas_tools import CanvasTools
 
+# initialize canvas tools
 canvas_tools = CanvasTools()
 
 
 def detect_intent(query: str):
     """
-    Detect user intent from natural language query.
+    Detect user intent from a natural language query.
     """
+
     query = query.lower()
 
     if "course" in query:
@@ -30,8 +32,9 @@ def detect_intent(query: str):
 
 def select_tool(intent: str):
     """
-    Select the appropriate tool based on intent.
+    Select which Canvas tool should be called.
     """
+
     if intent == "list_courses":
         return "list_courses"
 
@@ -63,7 +66,7 @@ async def execute_tool(tool, course_id=None, assignment_id=None):
 
 def generate_response(data):
     """
-    Convert tool output into a readable response.
+    Convert tool output into readable text.
     """
 
     if not data:
