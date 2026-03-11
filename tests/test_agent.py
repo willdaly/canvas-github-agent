@@ -240,6 +240,68 @@ class TestCanvasTools:
             assert tools.canvas_url == 'https://test.canvas.com'
             assert tools.canvas_token == 'test_token'
 
+    def test_canvas_tools_mcp_toggle_false(self):
+        """Test that CANVAS_USE_MCP disables MCP path."""
+        from tools.canvas_tools import CanvasTools
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_URL': 'https://test.canvas.com',
+            'CANVAS_API_TOKEN': 'test_token',
+            'CANVAS_USE_MCP': 'false'
+        }):
+            tools = CanvasTools()
+            assert tools.use_mcp is False
+
+    def test_list_courses_falls_back_to_direct_api(self):
+        """If MCP path errors, list_courses should use direct Canvas REST fallback."""
+        from tools.canvas_tools import CanvasTools
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_URL': 'https://test.canvas.com',
+            'CANVAS_API_TOKEN': 'test_token',
+            'CANVAS_USE_MCP': 'true'
+        }):
+            tools = CanvasTools()
+
+            with patch.object(
+                CanvasTools,
+                'get_canvas_session',
+                side_effect=RuntimeError('mcp unavailable'),
+            ), patch.object(
+                CanvasTools,
+                '_direct_list_courses',
+                return_value=[{'id': 1, 'name': 'CS Test'}],
+            ) as direct_mock:
+                result = asyncio.run(tools.list_courses())
+
+            assert result == [{'id': 1, 'name': 'CS Test'}]
+            direct_mock.assert_called_once()
+
+    def test_get_course_assignments_falls_back_to_direct_api(self):
+        """If MCP path errors, assignment listing should use direct Canvas REST fallback."""
+        from tools.canvas_tools import CanvasTools
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_URL': 'https://test.canvas.com',
+            'CANVAS_API_TOKEN': 'test_token',
+            'CANVAS_USE_MCP': 'true'
+        }):
+            tools = CanvasTools()
+
+            with patch.object(
+                CanvasTools,
+                'get_canvas_session',
+                side_effect=RuntimeError('mcp unavailable'),
+            ), patch.object(
+                CanvasTools,
+                '_direct_get_course_assignments',
+                return_value=[{'id': 2, 'name': 'HW1'}],
+            ) as direct_mock:
+                result = asyncio.run(tools.get_course_assignments(123))
+
+            assert result == [{'id': 2, 'name': 'HW1'}]
+            direct_mock.assert_called_once_with(123)
+
 
 class TestGitHubTools:
     """Test GitHub tools (mock tests)."""
