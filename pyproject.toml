@@ -32,7 +32,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["app", "examples", "scaffolding", "tests", "tools"]
-py-modules = ["agent_reasoning", "cli", "example", "main", "templates"]
+py-modules = []
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -115,21 +115,11 @@ Usage:
     canvas-github-agent-cli                    Run in interactive mode
     canvas-github-agent-cli --help             Show this help message
 
-Wrapper script equivalents:
-    python cli.py
-    python cli.py --help
-
 Advanced command-line mode:
     canvas-github-agent list-courses
     canvas-github-agent list-assignments --course-id 12345
     canvas-github-agent create-repo --course-id 12345 --language python
     canvas-github-agent create-repo --course-id 12345 --confirm-type
-
-Wrapper script equivalents:
-    python main.py list-courses
-    python main.py list-assignments --course-id 12345
-    python main.py create-repo --course-id 12345 --language python
-    python main.py create-repo --course-id 12345 --confirm-type
   
 For more information, see README.md
 """)

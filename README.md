@@ -74,28 +74,20 @@ canvas-github-agent/
 ├── tools/                # Canvas, GitHub, and Notion integrations
 ├── cli.py                # Compatibility wrapper for the interactive CLI
 ├── main.py               # Compatibility wrapper for the command-line entrypoint
-├── example.py            # Compatibility wrapper for the example workflow
-└── templates.py          # Compatibility wrapper for starter templates
+└── pyproject.toml        # Packaging and tool configuration
 ```
 
 Inside `app/`, the main workflow now lives in `agent.py` and the interactive
 CLI lives in `cli.py`.
 
-The root-level `main.py`, `cli.py`, `example.py`, `templates.py`, and
-`agent_reasoning.py` remain as thin compatibility wrappers so existing commands
-and imports keep working while the project uses a more organized internal layout.
+The application logic lives under `app/`, integrations live under `tools/`, and
+project scaffolding lives under `scaffolding/`.
 
 ## Usage
 
 ### Interactive Mode (Easiest)
 
 For the simplest experience, use the interactive CLI:
-
-```bash
-python cli.py
-```
-
-If you install the project, you can also run:
 
 ```bash
 canvas-github-agent-cli
@@ -113,12 +105,6 @@ This will guide you through:
 ### List Your Canvas Courses
 
 ```bash
-python main.py list-courses
-```
-
-Installed command:
-
-```bash
 canvas-github-agent list-courses
 ```
 
@@ -127,7 +113,7 @@ This will display all your Canvas courses with their IDs.
 ### List Assignments for a Course
 
 ```bash
-python main.py list-assignments --course-id 12345
+canvas-github-agent list-assignments --course-id 12345
 ```
 
 Replace `12345` with your actual course ID.
@@ -137,19 +123,19 @@ Replace `12345` with your actual course ID.
 Create a destination for the next upcoming assignment:
 
 ```bash
-python main.py create-repo --course-id 12345
+canvas-github-agent create-repo --course-id 12345
 ```
 
 Create a destination for a specific assignment:
 
 ```bash
-python main.py create-repo --course-id 12345 --assignment-id 67890
+canvas-github-agent create-repo --course-id 12345 --assignment-id 67890
 ```
 
 Specify the programming language:
 
 ```bash
-python main.py create-repo --course-id 12345 --language python
+canvas-github-agent create-repo --course-id 12345 --language python
 ```
 
 Available languages:
@@ -161,13 +147,13 @@ Available languages:
 Override routing explicitly:
 
 ```bash
-python main.py create-repo --course-id 12345 --assignment-type writing
+canvas-github-agent create-repo --course-id 12345 --assignment-type writing
 ```
 
 Prompt to confirm inferred assignment type before creating destination:
 
 ```bash
-python main.py create-repo --course-id 12345 --confirm-type
+canvas-github-agent create-repo --course-id 12345 --confirm-type
 ```
 
 ## Generated Repository Structure
