@@ -16,7 +16,7 @@ A CrewAI-powered agent that automatically fetches assignments from Canvas LMS us
 ## Prerequisites
 
 - Python 3.10 or higher
-- Node.js (for GitHub MCP server)
+- Node.js 20 or higher (for MCP/Smithery tooling)
 - Canvas LMS API token
 - GitHub Personal Access Token
 
@@ -45,11 +45,23 @@ Edit `.env` and add your credentials:
 
 - `CANVAS_API_URL`: Your Canvas instance URL, for example your hosted Canvas domain
 - `CANVAS_API_TOKEN`: Your Canvas API token
+- `CANVAS_USE_MCP`: Set to `false` to bypass Canvas MCP and call Canvas REST API directly (recommended for headless server deployments)
 - `GITHUB_TOKEN`: Your GitHub Personal Access Token
 - `GITHUB_USERNAME`: Your GitHub username
 - `NOTION_TOKEN`: Your Notion integration token (required for writing assignment routing)
 - `NOTION_PARENT_PAGE_ID`: Parent page ID where writing assignment pages are created
 - `OPENAI_API_KEY`: Your OpenAI API key (for CrewAI)
+
+### Deployment Reliability Note
+
+In remote VM deployments, browser OAuth callbacks for Canvas MCP can be brittle.
+If you want a non-interactive setup, set:
+
+```env
+CANVAS_USE_MCP=false
+```
+
+When disabled, the app reads courses and assignments directly from Canvas REST using `CANVAS_API_URL` and `CANVAS_API_TOKEN`.
 
 ### Getting Canvas API Token
 
