@@ -112,12 +112,22 @@ def print_usage():
 Canvas Assignment Agent - Quick Start
 
 Usage:
-  python cli.py                              Run in interactive mode
-  python cli.py --help                       Show this help message
-  
-See main.py for advanced command-line options:
-  python main.py list-courses                List all your Canvas courses
-  python main.py list-assignments --course-id 12345
+    canvas-github-agent-cli                    Run in interactive mode
+    canvas-github-agent-cli --help             Show this help message
+
+Wrapper script equivalents:
+    python cli.py
+    python cli.py --help
+
+Advanced command-line mode:
+    canvas-github-agent list-courses
+    canvas-github-agent list-assignments --course-id 12345
+    canvas-github-agent create-repo --course-id 12345 --language python
+    canvas-github-agent create-repo --course-id 12345 --confirm-type
+
+Wrapper script equivalents:
+    python main.py list-courses
+    python main.py list-assignments --course-id 12345
     python main.py create-repo --course-id 12345 --language python
     python main.py create-repo --course-id 12345 --confirm-type
   
@@ -140,7 +150,7 @@ def run() -> None:
         print("\nMake sure you have:")
         print("  1. Created a .env file with your API tokens")
         print("  2. Installed dependencies: pip install -r requirements.txt")
-        print("\nFor more help, run: python cli.py --help")
+        print("\nFor more help, run: canvas-github-agent-cli --help")
 
 
 if __name__ == "__main__":
