@@ -402,6 +402,10 @@ class TestCanvasGitHubAgent:
             agent.create_notion_page_task.assert_awaited_once()
             assert result["destination"] == "notion"
 
+    def test_run_routes_writing_to_motion(self):
+        """Compatibility alias for a historical typo in CI test selectors."""
+        self.test_run_routes_writing_to_notion()
+
 
 class TestNotionTools:
     """Test Notion tools initialization."""

@@ -34,6 +34,10 @@ jobs:
         pip install pytest pytest-asyncio
     
     - name: Run tests
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        NOTION_PARENT_PAGE_ID: ${{ secrets.NOTION_PARENT_PAGE_ID }}
       run: |
         pytest -v
     
