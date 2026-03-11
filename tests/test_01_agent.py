@@ -1,5 +1,5 @@
 import asyncio
-from agent_reasoning import handle_user_query
+from app.agent_reasoning import handle_user_query
 
 
 async def main():

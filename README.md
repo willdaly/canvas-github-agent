@@ -63,6 +63,28 @@ Edit `.env` and add your credentials:
 3. Select scopes: `repo`, `workflow`
 4. Copy the token to your `.env` file
 
+## Project Structure
+
+```text
+canvas-github-agent/
+├── app/                  # Core agent workflows, reasoning, and CLI
+├── examples/             # Example scripts and usage flows
+├── scaffolding/          # Starter-file generation and templates
+├── tests/                # Test suite
+├── tools/                # Canvas, GitHub, and Notion integrations
+├── cli.py                # Compatibility wrapper for the interactive CLI
+├── main.py               # Compatibility wrapper for the command-line entrypoint
+├── example.py            # Compatibility wrapper for the example workflow
+└── templates.py          # Compatibility wrapper for starter templates
+```
+
+Inside `app/`, the main workflow now lives in `agent.py` and the interactive
+CLI lives in `cli.py`.
+
+The root-level `main.py`, `cli.py`, `example.py`, `templates.py`, and
+`agent_reasoning.py` remain as thin compatibility wrappers so existing commands
+and imports keep working while the project uses a more organized internal layout.
+
 ## Usage
 
 ### Interactive Mode (Easiest)
@@ -71,6 +93,12 @@ For the simplest experience, use the interactive CLI:
 
 ```bash
 python cli.py
+```
+
+If you install the project, you can also run:
+
+```bash
+canvas-github-agent-cli
 ```
 
 This will guide you through:
@@ -86,6 +114,12 @@ This will guide you through:
 
 ```bash
 python main.py list-courses
+```
+
+Installed command:
+
+```bash
+canvas-github-agent list-courses
 ```
 
 This will display all your Canvas courses with their IDs.
@@ -199,6 +233,9 @@ The project uses:
 - **Canvas MCP**: For Canvas LMS integration via Model Context Protocol
 - **GitHub MCP**: For GitHub operations via Model Context Protocol
 - **Templates**: Language-specific starter code templates
+
+Core code now lives under `app/`, `tools/`, and `scaffolding/`, with tests in
+`tests/` and usage demos in `examples/`.
 
 ## Troubleshooting
 

@@ -7,7 +7,7 @@ Mock tests are provided for basic functionality validation.
 import pytest
 import asyncio
 from unittest.mock import Mock, patch, AsyncMock
-from templates import (
+from scaffolding.templates import (
     generate_starter_files,
     get_template_for_language,
     build_agent_fact_card,
@@ -230,7 +230,7 @@ class TestCanvasTools:
     
     def test_canvas_tools_initialization(self):
         """Test that CanvasTools initializes correctly."""
-        from canvas_tools import CanvasTools
+        from tools.canvas_tools import CanvasTools
         
         with patch.dict('os.environ', {
             'CANVAS_API_URL': 'https://test.canvas.com',
@@ -246,7 +246,7 @@ class TestGitHubTools:
     
     def test_github_tools_initialization(self):
         """Test that GitHubTools initializes correctly."""
-        from github_tools import GitHubTools
+        from tools.github_tools import GitHubTools
         
         with patch.dict('os.environ', {
             'GITHUB_TOKEN': 'test_token',
@@ -262,7 +262,7 @@ class TestCanvasGitHubAgent:
     
     def test_agent_initialization(self):
         """Test that the agent initializes correctly."""
-        from main import CanvasGitHubAgent
+        from app.agent import CanvasGitHubAgent
         
         with patch.dict('os.environ', {
             'CANVAS_API_URL': 'https://test.canvas.com',
@@ -277,7 +277,7 @@ class TestCanvasGitHubAgent:
             
     def test_create_assignment_fetcher_agent(self):
         """Test creation of assignment fetcher agent."""
-        from main import CanvasGitHubAgent
+        from app.agent import CanvasGitHubAgent
         
         with patch.dict('os.environ', {
             'CANVAS_API_TOKEN': 'test_token',
@@ -290,7 +290,7 @@ class TestCanvasGitHubAgent:
             
     def test_create_repository_initializer_agent(self):
         """Test creation of repository initializer agent."""
-        from main import CanvasGitHubAgent
+        from app.agent import CanvasGitHubAgent
         
         with patch.dict('os.environ', {
             'CANVAS_API_TOKEN': 'test_token',
@@ -303,7 +303,7 @@ class TestCanvasGitHubAgent:
 
     def test_infer_assignment_type_coding(self):
         """Infer coding assignment from assignment text."""
-        from main import CanvasGitHubAgent
+        from app.agent import CanvasGitHubAgent
 
         with patch.dict('os.environ', {
             'CANVAS_API_TOKEN': 'test_token',
@@ -319,7 +319,7 @@ class TestCanvasGitHubAgent:
 
     def test_infer_assignment_type_writing(self):
         """Infer writing assignment from assignment text."""
-        from main import CanvasGitHubAgent
+        from app.agent import CanvasGitHubAgent
 
         with patch.dict('os.environ', {
             'CANVAS_API_TOKEN': 'test_token',
@@ -335,7 +335,7 @@ class TestCanvasGitHubAgent:
 
     def test_run_routes_coding_to_github(self):
         """Run routes coding assignments to GitHub creation path."""
-        from main import CanvasGitHubAgent
+        from app.agent import CanvasGitHubAgent
 
         with patch.dict('os.environ', {
             'CANVAS_API_TOKEN': 'test_token',
@@ -370,7 +370,7 @@ class TestCanvasGitHubAgent:
 
     def test_run_routes_writing_to_notion(self):
         """Run routes writing assignments to Notion page creation path."""
-        from main import CanvasGitHubAgent
+        from app.agent import CanvasGitHubAgent
 
         with patch.dict('os.environ', {
             'CANVAS_API_TOKEN': 'test_token',
@@ -408,7 +408,7 @@ class TestNotionTools:
 
     def test_notion_tools_initialization(self):
         """Test that NotionTools initializes correctly."""
-        from notion_tools import NotionTools
+        from tools.notion_tools import NotionTools
 
         with patch.dict('os.environ', {
             'NOTION_TOKEN': 'test_notion_token',

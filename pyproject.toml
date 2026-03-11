@@ -14,6 +14,10 @@ dependencies = [
     "python-dateutil>=2.8.0",
 ]
 
+[project.scripts]
+canvas-github-agent = "app.agent:run"
+canvas-github-agent-cli = "app.cli:run"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4.0",
