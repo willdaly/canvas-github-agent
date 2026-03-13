@@ -446,7 +446,6 @@ async def main():
         action="store_true",
         help="Prompt to confirm inferred assignment type before creating destination"
     )
-    
     args = parser.parse_args()
     
     if args.command == "list-courses":
@@ -471,7 +470,6 @@ async def main():
             assignment_type=args.assignment_type,
             confirm_assignment_type=args.confirm_type,
         )
-
 
 def run() -> None:
     """Synchronous entry point for installed console scripts."""

@@ -1,0 +1,29 @@
+{
+  "schema_version": "0.1-draft",
+  "agent_id": "assignment-fetcher",
+  "name": "Assignment Fetcher",
+  "summary": "Retrieves and interprets assignment details from Canvas LMS.",
+  "domain": "canvas retrieval",
+  "capabilities": [
+    "list_courses",
+    "get_course_assignments",
+    "get_assignment_details",
+    "extract_due_dates",
+    "extract_assignment_requirements"
+  ],
+  "interoperability": {
+    "a2a": "@assignment-fetcher",
+    "mcp": "#canvas-mcp"
+  },
+  "registry": {
+    "url": "https://index.projectnanda.org",
+    "status": "not_registered"
+  },
+  "source_repository": "https://github.com/willdaly/canvas-github-agent",
+  "metadata": {
+    "version": "0.1.0",
+    "implementation_ref": "app/agent.py#create_assignment_fetcher_agent",
+    "used_in_runtime": false,
+    "notes": "Defined as CrewAI role metadata and currently validated via tests."
+  }
+}

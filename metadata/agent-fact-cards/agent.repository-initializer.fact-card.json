@@ -1,0 +1,29 @@
+{
+  "schema_version": "0.1-draft",
+  "agent_id": "repository-initializer",
+  "name": "Repository Initializer",
+  "summary": "Creates and initializes GitHub repositories with assignment scaffolding.",
+  "domain": "repository automation",
+  "capabilities": [
+    "create_repository",
+    "initialize_readme",
+    "generate_language_templates",
+    "upload_starter_files",
+    "enforce_naming_conventions"
+  ],
+  "interoperability": {
+    "a2a": "@repository-initializer",
+    "mcp": "#github-mcp"
+  },
+  "registry": {
+    "url": "https://index.projectnanda.org",
+    "status": "not_registered"
+  },
+  "source_repository": "https://github.com/willdaly/canvas-github-agent",
+  "metadata": {
+    "version": "0.1.0",
+    "implementation_ref": "app/agent.py#create_repository_initializer_agent",
+    "used_in_runtime": false,
+    "notes": "Defined as CrewAI role metadata and currently validated via tests."
+  }
+}

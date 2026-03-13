@@ -12,6 +12,7 @@ A CrewAI-powered agent that automatically fetches assignments from Canvas LMS us
 - 🔧 **Multiple Languages**: Support for Python, Java, JavaScript, and C++
 - 📝 **README Generation**: Auto-generate README with assignment details and due dates
 - ✅ **Test Setup**: Include basic test structure and configuration
+- 🪪 **Agent Fact Cards**: Includes static metadata cards for the service and internal agent roles
 
 ## Prerequisites
 
@@ -194,6 +195,10 @@ Prompt to confirm inferred assignment type before creating destination:
 ```bash
 canvas-github-agent create-repo --course-id 12345 --confirm-type
 ```
+
+### Agent Fact Cards
+
+Static metadata cards are stored in `metadata/agent-fact-cards/`.
 
 ## Generated Repository Structure
 

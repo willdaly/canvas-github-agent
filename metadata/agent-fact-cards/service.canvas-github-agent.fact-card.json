@@ -1,0 +1,50 @@
+{
+  "schema_version": "0.1-draft",
+  "agent_id": "canvas-github-agent",
+  "name": "Canvas Assignment Router",
+  "summary": "Fetches Canvas assignments and routes to GitHub repository creation for coding assignments or Notion page creation for writing assignments.",
+  "domain": "education automation",
+  "capabilities": [
+    "list_courses",
+    "list_assignments",
+    "fetch_assignment_details",
+    "infer_assignment_type",
+    "create_github_repository",
+    "generate_starter_files",
+    "create_notion_page"
+  ],
+  "interoperability": {
+    "a2a": "@canvas-github-agent",
+    "mcp": "#canvas-mcp"
+  },
+  "registry": {
+    "url": "https://index.projectnanda.org",
+    "status": "not_registered"
+  },
+  "source_repository": "https://github.com/willdaly/canvas-github-agent",
+  "metadata": {
+    "version": "0.1.0",
+    "owner": "willdaly",
+    "runtime": "python>=3.10",
+    "entrypoint": "app/agent.py",
+    "inputs": [
+      "course_id",
+      "assignment_id (optional)",
+      "language",
+      "assignment_type (optional)"
+    ],
+    "outputs": [
+      "github repository URL for coding assignments",
+      "notion page URL for writing assignments"
+    ],
+    "tools_used": [
+      "CanvasTools",
+      "GitHubTools",
+      "NotionTools"
+    ],
+    "constraints": [
+      "requires Canvas and GitHub credentials",
+      "requires Notion credentials for writing assignment flow"
+    ]
+  }
+}
