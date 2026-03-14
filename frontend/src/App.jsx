@@ -1,6 +1,8 @@
 import { useState } from "react";
 
-const API = "http://localhost:8000";
+const API =
+  import.meta.env.VITE_API_URL ||
+  `${window.location.protocol}//${window.location.hostname}:8000`;
 
 export default function App() {
   const [courses, setCourses] = useState([]);
@@ -13,13 +15,33 @@ export default function App() {
   const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
 
+  async function parseResponse(res) {
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      return res.json();
+    }
+    return {};
+  }
+
+  function getErrorDetail(data, fallback) {
+    if (typeof data?.detail === "string" && data.detail.trim()) {
+      return data.detail;
+    }
+    return fallback;
+  }
+
   async function fetchCourses() {
     setLoading("courses"); setError(""); setCourses([]); setAssignments([]); setResult(null);
     try {
       const res = await fetch(`${API}/courses`);
-      const data = await res.json();
+      const data = await parseResponse(res);
+      if (!res.ok) {
+        throw new Error(getErrorDetail(data, "Failed to fetch courses."));
+      }
       setCourses(data.courses || []);
-    } catch { setError("❌ Could not connect to backend. Is api.py running?"); }
+    } catch (e) {
+      setError(`❌ ${e.message || "Could not connect to backend. Is api.py running?"}`);
+    }
     setLoading("");
   }
 
@@ -28,9 +50,14 @@ export default function App() {
     setLoading("assignments"); setError("");
     try {
       const res = await fetch(`${API}/courses/${courseId}/assignments`);
-      const data = await res.json();
+      const data = await parseResponse(res);
+      if (!res.ok) {
+        throw new Error(getErrorDetail(data, "Failed to fetch assignments."));
+      }
       setAssignments(data.assignments || []);
-    } catch { setError("❌ Failed to fetch assignments."); }
+    } catch (e) {
+      setError(`❌ ${e.message || "Failed to fetch assignments."}`);
+    }
     setLoading("");
   }
 
@@ -48,8 +75,8 @@ export default function App() {
           assignment_type: assignmentType === "auto" ? undefined : assignmentType,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Unknown error");
+      const data = await parseResponse(res);
+      if (!res.ok) throw new Error(getErrorDetail(data, "Unknown error"));
       setResult(data);
     } catch (e) { setError(`❌ ${e.message}`); }
     setLoading("");
