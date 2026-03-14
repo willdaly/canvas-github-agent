@@ -43,7 +43,7 @@ cp .env.example .env
 
 Edit `.env` and add your credentials:
 
-- `CANVAS_API_URL`: Your Canvas instance URL, for example your hosted Canvas domain
+- `CANVAS_API_URL`: Your Canvas instance URL (e.g., <https://canvas.instructure.com>)
 - `CANVAS_API_TOKEN`: Your Canvas API token
 - `CANVAS_USE_MCP`: Set to `false` to bypass Canvas MCP and call Canvas REST API directly (recommended for headless server deployments)
 - `GITHUB_TOKEN`: Your GitHub Personal Access Token
@@ -51,6 +51,7 @@ Edit `.env` and add your credentials:
 - `NOTION_TOKEN`: Your Notion integration token (required for writing assignment routing)
 - `NOTION_PARENT_PAGE_ID`: Parent page ID where writing assignment pages are created
 - `OPENAI_API_KEY`: Your OpenAI API key (for CrewAI)
+- `FRONTEND_ORIGINS`: Comma-separated frontend origins allowed by API CORS (set this for deployed frontend domains)
 
 ### Deployment Reliability Note
 
@@ -65,60 +66,19 @@ When disabled, the app reads courses and assignments directly from Canvas REST u
 
 ### Getting Canvas API Token
 
-1. Log into your Canvas account.
-1. Go to Account → Settings.
-1. Scroll down to "Approved Integrations."
-1. Click "+ New Access Token."
-1. Give it a purpose and generate the token.
-1. Copy the token to your `.env` file.
+1. Log into your Canvas account
+1. Go to Account → Settings
+1. Scroll down to "Approved Integrations"
+1. Click "+ New Access Token"
+1. Give it a purpose and generate the token
+1. Copy the token to your `.env` file
 
 ### Getting GitHub Token
 
-1. Go to GitHub Settings → Developer settings → Personal access tokens.
-1. Generate a new token (classic).
-1. Select scopes: `repo`, `workflow`.
-1. Copy the token to your `.env` file.
-
-## Project Structure
-
-```text
-canvas-github-agent/
-├── LICENSE              # Project license
-├── README.md            # Project documentation
-├── app/                  # Core agent workflows, reasoning, and CLI
-├── examples/             # Example scripts and usage flows
-├── requirements.txt      # Runtime dependency list
-├── scaffolding/          # Starter-file generation and templates
-├── tests/                # Test suite
-├── tools/                # Canvas, GitHub, and Notion integrations
-└── pyproject.toml        # Packaging and tool configuration
-```
-
-Inside `app/`, the main workflow now lives in `agent.py` and the interactive
-CLI lives in `cli.py`.
-
-The application logic lives under `app/`, integrations live under `tools/`, and
-project scaffolding lives under `scaffolding/`.
-
-## Install And Run
-
-If you want the packaged commands available in your shell, install the project in editable mode:
-
-```bash
-pip install -e .
-```
-
-That provides these commands:
-
-- `canvas-github-agent-cli` for the interactive workflow
-- `canvas-github-agent` for direct command-line operations
-
-You can then run:
-
-```bash
-canvas-github-agent-cli
-canvas-github-agent --help
-```
+1. Go to GitHub Settings → Developer settings → Personal access tokens
+1. Generate new token (classic)
+1. Select scopes: `repo`, `workflow`
+1. Copy the token to your `.env` file
 
 ## Usage
 
@@ -133,10 +93,10 @@ canvas-github-agent-cli
 This will guide you through:
 
 1. Selecting a course
-2. Choosing an assignment
-3. Picking a programming language
-4. Confirming assignment type (coding/writing)
-5. Creating a GitHub repo (coding) or Notion page (writing)
+1. Choosing an assignment
+1. Picking a programming language
+1. Confirming assignment type (coding/writing)
+1. Creating a GitHub repo (coding) or Notion page (writing)
 
 ### Command-Line Mode
 
@@ -244,16 +204,17 @@ assignment-name/
 
 1. **Canvas Integration**: The agent connects to Canvas LMS using the canvas-mcp server to fetch assignment details including name, description, and due date.
 
-2. **Repository Creation**: Using GitHub MCP, it creates a new repository in your GitHub account with the assignment name.
+1. **Repository Creation**: Using GitHub MCP, it creates a new repository in your GitHub account with the assignment name.
 
-3. **Starter Code Generation**: Based on the programming language specified, it generates appropriate starter files including:
-   - README with assignment details
-   - Main source file with TODO comments
-   - Test files with basic structure
-   - Configuration files (requirements.txt, package.json, etc.)
-   - Language-specific .gitignore
+1. **Starter Code Generation**: Based on the programming language specified, it generates appropriate starter files including:
 
-4. **File Upload**: All generated files are committed to the repository with appropriate commit messages.
+- README with assignment details
+- Main source file with TODO comments
+- Test files with basic structure
+- Configuration files (requirements.txt, package.json, etc.)
+- Language-specific .gitignore
+
+1. **File Upload**: All generated files are committed to the repository with appropriate commit messages.
 
 ## Architecture
 
