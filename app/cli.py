@@ -5,7 +5,7 @@ Creates GitHub repositories for coding assignments and Notion pages for writing 
 """
 import sys
 import asyncio
-from main import CanvasGitHubAgent, list_courses, list_course_assignments
+from app.agent import CanvasGitHubAgent, list_courses, list_course_assignments
 
 
 async def interactive_mode():
@@ -112,30 +112,36 @@ def print_usage():
 Canvas Assignment Agent - Quick Start
 
 Usage:
-  python cli.py                              Run in interactive mode
-  python cli.py --help                       Show this help message
-  
-See main.py for advanced command-line options:
-  python main.py list-courses                List all your Canvas courses
-  python main.py list-assignments --course-id 12345
-    python main.py create-repo --course-id 12345 --language python
-    python main.py create-repo --course-id 12345 --confirm-type
+    canvas-github-agent-cli                    Run in interactive mode
+    canvas-github-agent-cli --help             Show this help message
+
+Advanced command-line mode:
+    canvas-github-agent list-courses
+    canvas-github-agent list-assignments --course-id 12345
+    canvas-github-agent create-repo --course-id 12345 --language python
+    canvas-github-agent create-repo --course-id 12345 --confirm-type
   
 For more information, see README.md
 """)
 
 
-if __name__ == "__main__":
+def run() -> None:
+    """Synchronous entry point for installed console scripts."""
     if len(sys.argv) > 1 and sys.argv[1] in ["--help", "-h", "help"]:
         print_usage()
-    else:
-        try:
-            asyncio.run(interactive_mode())
-        except KeyboardInterrupt:
-            print("\n\nInterrupted by user. Goodbye!")
-        except Exception as e:
-            print(f"\n❌ Error: {e}")
-            print("\nMake sure you have:")
-            print("  1. Created a .env file with your API tokens")
-            print("  2. Installed dependencies: pip install -r requirements.txt")
-            print("\nFor more help, run: python cli.py --help")
+        return
+
+    try:
+        asyncio.run(interactive_mode())
+    except KeyboardInterrupt:
+        print("\n\nInterrupted by user. Goodbye!")
+    except Exception as error:
+        print(f"\n❌ Error: {error}")
+        print("\nMake sure you have:")
+        print("  1. Created a .env file with your API tokens")
+        print("  2. Installed dependencies: pip install -r requirements.txt")
+        print("\nFor more help, run: canvas-github-agent-cli --help")
+
+
+if __name__ == "__main__":
+    run()

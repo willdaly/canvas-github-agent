@@ -7,7 +7,7 @@ Mock tests are provided for basic functionality validation.
 import pytest
 import asyncio
 from unittest.mock import Mock, patch, AsyncMock
-from templates import (
+from scaffolding.templates import (
     generate_starter_files,
     get_template_for_language,
     build_agent_fact_card,
@@ -230,7 +230,7 @@ class TestCanvasTools:
     
     def test_canvas_tools_initialization(self):
         """Test that CanvasTools initializes correctly."""
-        from canvas_tools import CanvasTools
+        from tools.canvas_tools import CanvasTools
         
         with patch.dict('os.environ', {
             'CANVAS_API_URL': 'https://test.canvas.com',
@@ -240,13 +240,75 @@ class TestCanvasTools:
             assert tools.canvas_url == 'https://test.canvas.com'
             assert tools.canvas_token == 'test_token'
 
+    def test_canvas_tools_mcp_toggle_false(self):
+        """Test that CANVAS_USE_MCP disables MCP path."""
+        from tools.canvas_tools import CanvasTools
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_URL': 'https://test.canvas.com',
+            'CANVAS_API_TOKEN': 'test_token',
+            'CANVAS_USE_MCP': 'false'
+        }):
+            tools = CanvasTools()
+            assert tools.use_mcp is False
+
+    def test_list_courses_falls_back_to_direct_api(self):
+        """If MCP path errors, list_courses should use direct Canvas REST fallback."""
+        from tools.canvas_tools import CanvasTools
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_URL': 'https://test.canvas.com',
+            'CANVAS_API_TOKEN': 'test_token',
+            'CANVAS_USE_MCP': 'true'
+        }):
+            tools = CanvasTools()
+
+            with patch.object(
+                CanvasTools,
+                'get_canvas_session',
+                side_effect=RuntimeError('mcp unavailable'),
+            ), patch.object(
+                CanvasTools,
+                '_direct_list_courses',
+                return_value=[{'id': 1, 'name': 'CS Test'}],
+            ) as direct_mock:
+                result = asyncio.run(tools.list_courses())
+
+            assert result == [{'id': 1, 'name': 'CS Test'}]
+            direct_mock.assert_called_once()
+
+    def test_get_course_assignments_falls_back_to_direct_api(self):
+        """If MCP path errors, assignment listing should use direct Canvas REST fallback."""
+        from tools.canvas_tools import CanvasTools
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_URL': 'https://test.canvas.com',
+            'CANVAS_API_TOKEN': 'test_token',
+            'CANVAS_USE_MCP': 'true'
+        }):
+            tools = CanvasTools()
+
+            with patch.object(
+                CanvasTools,
+                'get_canvas_session',
+                side_effect=RuntimeError('mcp unavailable'),
+            ), patch.object(
+                CanvasTools,
+                '_direct_get_course_assignments',
+                return_value=[{'id': 2, 'name': 'HW1'}],
+            ) as direct_mock:
+                result = asyncio.run(tools.get_course_assignments(123))
+
+            assert result == [{'id': 2, 'name': 'HW1'}]
+            direct_mock.assert_called_once_with(123)
+
 
 class TestGitHubTools:
     """Test GitHub tools (mock tests)."""
     
     def test_github_tools_initialization(self):
         """Test that GitHubTools initializes correctly."""
-        from github_tools import GitHubTools
+        from tools.github_tools import GitHubTools
         
         with patch.dict('os.environ', {
             'GITHUB_TOKEN': 'test_token',
@@ -262,7 +324,7 @@ class TestCanvasGitHubAgent:
     
     def test_agent_initialization(self):
         """Test that the agent initializes correctly."""
-        from main import CanvasGitHubAgent
+        from app.agent import CanvasGitHubAgent
         
         with patch.dict('os.environ', {
             'CANVAS_API_URL': 'https://test.canvas.com',
@@ -277,7 +339,7 @@ class TestCanvasGitHubAgent:
             
     def test_create_assignment_fetcher_agent(self):
         """Test creation of assignment fetcher agent."""
-        from main import CanvasGitHubAgent
+        from app.agent import CanvasGitHubAgent
         
         with patch.dict('os.environ', {
             'CANVAS_API_TOKEN': 'test_token',
@@ -290,7 +352,7 @@ class TestCanvasGitHubAgent:
             
     def test_create_repository_initializer_agent(self):
         """Test creation of repository initializer agent."""
-        from main import CanvasGitHubAgent
+        from app.agent import CanvasGitHubAgent
         
         with patch.dict('os.environ', {
             'CANVAS_API_TOKEN': 'test_token',
@@ -303,7 +365,7 @@ class TestCanvasGitHubAgent:
 
     def test_infer_assignment_type_coding(self):
         """Infer coding assignment from assignment text."""
-        from main import CanvasGitHubAgent
+        from app.agent import CanvasGitHubAgent
 
         with patch.dict('os.environ', {
             'CANVAS_API_TOKEN': 'test_token',
@@ -319,7 +381,7 @@ class TestCanvasGitHubAgent:
 
     def test_infer_assignment_type_writing(self):
         """Infer writing assignment from assignment text."""
-        from main import CanvasGitHubAgent
+        from app.agent import CanvasGitHubAgent
 
         with patch.dict('os.environ', {
             'CANVAS_API_TOKEN': 'test_token',
@@ -335,7 +397,7 @@ class TestCanvasGitHubAgent:
 
     def test_run_routes_coding_to_github(self):
         """Run routes coding assignments to GitHub creation path."""
-        from main import CanvasGitHubAgent
+        from app.agent import CanvasGitHubAgent
 
         with patch.dict('os.environ', {
             'CANVAS_API_TOKEN': 'test_token',
@@ -370,7 +432,7 @@ class TestCanvasGitHubAgent:
 
     def test_run_routes_writing_to_notion(self):
         """Run routes writing assignments to Notion page creation path."""
-        from main import CanvasGitHubAgent
+        from app.agent import CanvasGitHubAgent
 
         with patch.dict('os.environ', {
             'CANVAS_API_TOKEN': 'test_token',
@@ -402,13 +464,17 @@ class TestCanvasGitHubAgent:
             agent.create_notion_page_task.assert_awaited_once()
             assert result["destination"] == "notion"
 
+    def test_run_routes_writing_to_motion(self):
+        """Compatibility alias for a historical typo in CI test selectors."""
+        self.test_run_routes_writing_to_notion()
+
 
 class TestNotionTools:
     """Test Notion tools initialization."""
 
     def test_notion_tools_initialization(self):
         """Test that NotionTools initializes correctly."""
-        from notion_tools import NotionTools
+        from tools.notion_tools import NotionTools
 
         with patch.dict('os.environ', {
             'NOTION_TOKEN': 'test_notion_token',

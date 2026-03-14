@@ -12,10 +12,10 @@ from dateutil import parser as dateutil_parser
 from typing import Optional
 from dotenv import load_dotenv
 from crewai import Agent, Task, Crew, Process
-from canvas_tools import CanvasTools
-from github_tools import GitHubTools
-from templates import generate_starter_files, normalize_slug, html_to_markdown
-from notion_tools import NotionTools
+from tools.canvas_tools import CanvasTools
+from tools.github_tools import GitHubTools
+from scaffolding.templates import generate_starter_files, normalize_slug, html_to_markdown
+from tools.notion_tools import NotionTools
 
 
 # Load environment variables
@@ -473,5 +473,10 @@ async def main():
         )
 
 
-if __name__ == "__main__":
+def run() -> None:
+    """Synchronous entry point for installed console scripts."""
     asyncio.run(main())
+
+
+if __name__ == "__main__":
+    run()

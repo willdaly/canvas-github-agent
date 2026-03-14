@@ -4,7 +4,7 @@ Example usage of Canvas-GitHub Agent
 This script demonstrates how to use the CanvasGitHubAgent programmatically.
 """
 import asyncio
-from main import CanvasGitHubAgent, list_courses, list_course_assignments
+from app.agent import CanvasGitHubAgent, list_courses, list_course_assignments
 
 
 async def example_workflow():

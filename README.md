@@ -16,7 +16,7 @@ A CrewAI-powered agent that automatically fetches assignments from Canvas LMS us
 ## Prerequisites
 
 - Python 3.10 or higher
-- Node.js (for GitHub MCP server)
+- Node.js 20 or higher (for MCP/Smithery tooling)
 - Canvas LMS API token
 - GitHub Personal Access Token
 
@@ -45,12 +45,24 @@ Edit `.env` and add your credentials:
 
 - `CANVAS_API_URL`: Your Canvas instance URL (e.g., <https://canvas.instructure.com>)
 - `CANVAS_API_TOKEN`: Your Canvas API token
+- `CANVAS_USE_MCP`: Set to `false` to bypass Canvas MCP and call Canvas REST API directly (recommended for headless server deployments)
 - `GITHUB_TOKEN`: Your GitHub Personal Access Token
 - `GITHUB_USERNAME`: Your GitHub username
 - `NOTION_TOKEN`: Your Notion integration token (required for writing assignment routing)
 - `NOTION_PARENT_PAGE_ID`: Parent page ID where writing assignment pages are created
 - `OPENAI_API_KEY`: Your OpenAI API key (for CrewAI)
 - `FRONTEND_ORIGINS`: Comma-separated frontend origins allowed by API CORS (set this for deployed frontend domains)
+
+### Deployment Reliability Note
+
+In remote VM deployments, browser OAuth callbacks for Canvas MCP can be brittle.
+If you want a non-interactive setup, set:
+
+```env
+CANVAS_USE_MCP=false
+```
+
+When disabled, the app reads courses and assignments directly from Canvas REST using `CANVAS_API_URL` and `CANVAS_API_TOKEN`.
 
 ### Getting Canvas API Token
 
@@ -75,7 +87,7 @@ Edit `.env` and add your credentials:
 For the simplest experience, use the interactive CLI:
 
 ```bash
-python cli.py
+canvas-github-agent-cli
 ```
 
 This will guide you through:
@@ -91,7 +103,7 @@ This will guide you through:
 ### List Your Canvas Courses
 
 ```bash
-python main.py list-courses
+canvas-github-agent list-courses
 ```
 
 This will display all your Canvas courses with their IDs.
@@ -99,7 +111,7 @@ This will display all your Canvas courses with their IDs.
 ### List Assignments for a Course
 
 ```bash
-python main.py list-assignments --course-id 12345
+canvas-github-agent list-assignments --course-id 12345
 ```
 
 Replace `12345` with your actual course ID.
@@ -109,19 +121,19 @@ Replace `12345` with your actual course ID.
 Create a destination for the next upcoming assignment:
 
 ```bash
-python main.py create-repo --course-id 12345
+canvas-github-agent create-repo --course-id 12345
 ```
 
 Create a destination for a specific assignment:
 
 ```bash
-python main.py create-repo --course-id 12345 --assignment-id 67890
+canvas-github-agent create-repo --course-id 12345 --assignment-id 67890
 ```
 
 Specify the programming language:
 
 ```bash
-python main.py create-repo --course-id 12345 --language python
+canvas-github-agent create-repo --course-id 12345 --language python
 ```
 
 Available languages:
@@ -134,13 +146,13 @@ Available languages:
 Override routing explicitly:
 
 ```bash
-python main.py create-repo --course-id 12345 --assignment-type writing
+canvas-github-agent create-repo --course-id 12345 --assignment-type writing
 ```
 
 Prompt to confirm inferred assignment type before creating destination:
 
 ```bash
-python main.py create-repo --course-id 12345 --confirm-type
+canvas-github-agent create-repo --course-id 12345 --confirm-type
 ```
 
 ## Generated Repository Structure
@@ -212,6 +224,9 @@ The project uses:
 - **Canvas MCP**: For Canvas LMS integration via Model Context Protocol
 - **GitHub MCP**: For GitHub operations via Model Context Protocol
 - **Templates**: Language-specific starter code templates
+
+Core code now lives under `app/`, `tools/`, and `scaffolding/`, with tests in
+`tests/` and usage demos in `examples/`.
 
 ## Troubleshooting
 
