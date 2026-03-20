@@ -26,6 +26,28 @@ class CanvasTools:
             raise ValueError("CANVAS_API_TOKEN is required")
         return {"Authorization": f"Bearer {self.canvas_token}"}
 
+    def _normalize_assignment(self, assignment: Dict[str, Any]) -> Dict[str, Any]:
+        submission = assignment.get("submission") or {}
+        submitted_at = submission.get("submitted_at")
+        workflow_state = submission.get("workflow_state") or assignment.get("workflow_state")
+        is_completed = bool(
+            assignment.get("has_submitted_submissions")
+            or submitted_at
+            or workflow_state in {"submitted", "graded", "pending_review"}
+        )
+
+        return {
+            "id": assignment.get("id"),
+            "name": assignment.get("name", "Untitled Assignment"),
+            "description": assignment.get("description", ""),
+            "due_at": assignment.get("due_at"),
+            "has_submitted_submissions": bool(assignment.get("has_submitted_submissions")),
+            "submission": submission or None,
+            "submitted_at": submitted_at,
+            "workflow_state": workflow_state,
+            "is_completed": is_completed,
+        }
+
     def _direct_list_courses(self) -> List[Dict[str, Any]]:
         response = requests.get(
             f"{self.canvas_url.rstrip('/')}/api/v1/courses",
@@ -41,20 +63,12 @@ class CanvasTools:
         response = requests.get(
             f"{self.canvas_url.rstrip('/')}/api/v1/courses/{course_id}/assignments",
             headers=self._canvas_headers(),
-            params={"per_page": 100},
+            params={"per_page": 100, "include[]": "submission"},
             timeout=30,
         )
         response.raise_for_status()
         assignments = response.json()
-        return [
-            {
-                "id": a.get("id"),
-                "name": a.get("name", "Untitled Assignment"),
-                "description": a.get("description", ""),
-                "due_at": a.get("due_at"),
-            }
-            for a in assignments
-        ]
+        return [self._normalize_assignment(assignment) for assignment in assignments]
         
     @asynccontextmanager
     async def get_canvas_session(self):
@@ -138,7 +152,7 @@ class CanvasTools:
                                 {"id": aid, "name": aname}
                                 for aname, aid in data.items()
                             ]
-                        return data
+                        return [self._normalize_assignment(assignment) for assignment in data]
                 return []
         except Exception:
             return self._direct_get_course_assignments(course_id)

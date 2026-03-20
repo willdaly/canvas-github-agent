@@ -9,6 +9,7 @@ export default function App() {
   const [assignments, setAssignments] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [assignmentFilter, setAssignmentFilter] = useState("all");
   const [language, setLanguage] = useState("python");
   const [routeMode, setRouteMode] = useState("auto");
   const [result, setResult] = useState(null);
@@ -47,6 +48,7 @@ export default function App() {
 
   async function fetchAssignments(courseId) {
     setSelectedCourse(courseId); setAssignments([]); setSelectedAssignment(null); setResult(null);
+    setAssignmentFilter("all");
     setLoading("assignments"); setError("");
     try {
       const res = await fetch(`${API}/courses/${courseId}/assignments`);
@@ -60,6 +62,27 @@ export default function App() {
     }
     setLoading("");
   }
+
+  function isUpcomingAssignment(assignment) {
+    if (!assignment?.due_at) return false;
+    const dueDate = new Date(assignment.due_at);
+    return !Number.isNaN(dueDate.getTime()) && dueDate > new Date();
+  }
+
+  function isCompletedAssignment(assignment) {
+    return Boolean(
+      assignment?.is_completed ||
+      assignment?.has_submitted_submissions ||
+      assignment?.submitted_at ||
+      ["submitted", "graded", "pending_review"].includes(assignment?.workflow_state)
+    );
+  }
+
+  const filteredAssignments = assignments.filter((assignment) => {
+    if (assignmentFilter === "upcoming") return isUpcomingAssignment(assignment);
+    if (assignmentFilter === "completed") return isCompletedAssignment(assignment);
+    return true;
+  });
 
   async function handleCreate() {
     if (!selectedCourse) return;
@@ -131,17 +154,44 @@ export default function App() {
         {/* Step 2 - Pick Assignment */}
         {assignments.length > 0 && (
           <Section title="Step 2 — Pick an Assignment">
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: "0.9rem" }}>
+              {[
+                { key: "all", label: `All (${assignments.length})` },
+                { key: "upcoming", label: `Upcoming (${assignments.filter(isUpcomingAssignment).length})` },
+                { key: "completed", label: `Completed (${assignments.filter(isCompletedAssignment).length})` },
+              ].map((filter) => (
+                <button
+                  key={filter.key}
+                  onClick={() => setAssignmentFilter(filter.key)}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 999,
+                    border: "1px solid",
+                    borderColor: assignmentFilter === filter.key ? "#6366f1" : "#334155",
+                    background: assignmentFilter === filter.key ? "#1e1b4b" : "#0f172a",
+                    color: "#e2e8f0",
+                    fontSize: 13,
+                    cursor: "pointer",
+                  }}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <button onClick={() => setSelectedAssignment(null)}
-                style={{
-                  textAlign: "left", padding: "10px 14px", borderRadius: 8, border: "1px solid",
-                  borderColor: selectedAssignment === null ? "#6366f1" : "#334155",
-                  background: selectedAssignment === null ? "#1e1b4b" : "#1e293b",
-                  color: "#e2e8f0", cursor: "pointer", fontSize: 14
-                }}>
-                ⏭ Next upcoming assignment (auto)
-              </button>
-              {assignments.map(a => (
+              {assignmentFilter !== "completed" && (
+                <button onClick={() => setSelectedAssignment(null)}
+                  style={{
+                    textAlign: "left", padding: "10px 14px", borderRadius: 8, border: "1px solid",
+                    borderColor: selectedAssignment === null ? "#6366f1" : "#334155",
+                    background: selectedAssignment === null ? "#1e1b4b" : "#1e293b",
+                    color: "#e2e8f0", cursor: "pointer", fontSize: 14
+                  }}>
+                  ⏭ Next upcoming assignment (auto)
+                </button>
+              )}
+              {filteredAssignments.map(a => (
                 <button key={a.id} onClick={() => setSelectedAssignment(a.id)}
                   style={{
                     textAlign: "left", padding: "10px 14px", borderRadius: 8, border: "1px solid",
@@ -151,8 +201,14 @@ export default function App() {
                   }}>
                   <span style={{ color: "#94a3b8", marginRight: 8 }}>#{a.id}</span>{a.name}
                   {a.due_at && <span style={{ color: "#64748b", marginLeft: 8, fontSize: 12 }}>Due: {new Date(a.due_at).toLocaleDateString()}</span>}
+                  {isCompletedAssignment(a) && <span style={{ color: "#86efac", marginLeft: 8, fontSize: 12 }}>Completed</span>}
                 </button>
               ))}
+              {filteredAssignments.length === 0 && (
+                <div style={{ padding: "0.8rem 0.2rem", color: "#94a3b8", fontSize: 13 }}>
+                  No assignments match the current filter.
+                </div>
+              )}
             </div>
           </Section>
         )}
