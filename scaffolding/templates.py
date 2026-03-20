@@ -234,6 +234,18 @@ SOURCE_FILE_BY_LANGUAGE = {
     "rscript": "main.R",
 }
 
+PYTHON_NOTEBOOK_LIBRARY_RULES = [
+    {
+        "patterns": [
+            r"\bbayes(?:ian)?(?:\s+theorem)?\b",
+            r"\bprior\b",
+            r"\bposterior\b",
+        ],
+        "requirement": "scipy>=1.11.0",
+        "imports": ["from scipy.stats import beta"],
+    },
+]
+
 
 def get_template_for_language(language: str) -> dict:
     """
@@ -391,6 +403,36 @@ def assignment_mentions_jupyter_notebook(assignment_description: str) -> bool:
     return any(re.search(pattern, text) for pattern in patterns)
 
 
+def infer_python_notebook_requirements(assignment_description: str) -> List[str]:
+    """Infer extra Python requirements for notebook-based assignments."""
+    if not assignment_description:
+        return []
+
+    text = assignment_description.lower()
+    requirements: List[str] = []
+    for rule in PYTHON_NOTEBOOK_LIBRARY_RULES:
+        if any(re.search(pattern, text) for pattern in rule["patterns"]):
+            requirement = rule["requirement"]
+            if requirement not in requirements:
+                requirements.append(requirement)
+    return requirements
+
+
+def infer_python_notebook_imports(assignment_description: str) -> List[str]:
+    """Infer helpful Python notebook imports from assignment content."""
+    if not assignment_description:
+        return []
+
+    text = assignment_description.lower()
+    imports: List[str] = []
+    for rule in PYTHON_NOTEBOOK_LIBRARY_RULES:
+        if any(re.search(pattern, text) for pattern in rule["patterns"]):
+            for import_line in rule["imports"]:
+                if import_line not in imports:
+                    imports.append(import_line)
+    return imports
+
+
 def _build_python_stub_file(
     assignment_name: str,
     assignment_summary: str,
@@ -474,6 +516,7 @@ def _build_python_notebook_file(
     assignment_name: str,
     assignment_summary: str,
     function_names: List[str],
+    import_lines: List[str],
 ) -> str:
     code_lines = [
         f'"""{assignment_name}"""',
@@ -497,17 +540,31 @@ def _build_python_notebook_file(
         "    main()",
     ])
 
-    notebook = {
-        "cells": [
+    cells = [
+        {
+            "cell_type": "markdown",
+            "metadata": {"language": "markdown"},
+            "source": [
+                f"# {assignment_name}\n",
+                "\n",
+                f"{assignment_summary}\n",
+            ],
+        },
+    ]
+
+    if import_lines:
+        cells.append(
             {
-                "cell_type": "markdown",
-                "metadata": {"language": "markdown"},
-                "source": [
-                    f"# {assignment_name}\n",
-                    "\n",
-                    f"{assignment_summary}\n",
-                ],
-            },
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {"language": "python"},
+                "outputs": [],
+                "source": [f"{line}\n" for line in import_lines],
+            }
+        )
+
+    notebook = {
+        "cells": cells + [
             {
                 "cell_type": "code",
                 "execution_count": None,
@@ -551,6 +608,17 @@ def _select_notebook_target(requested_files: List[str]) -> str:
     if len(notebook_files) == 1:
         return notebook_files[0]
     return "main.ipynb"
+
+
+def _extend_python_requirements(existing_requirements: str, extra_requirements: List[str]) -> str:
+    if not extra_requirements:
+        return existing_requirements
+
+    lines = [line for line in existing_requirements.splitlines() if line.strip()]
+    for requirement in extra_requirements:
+        if requirement not in lines:
+            lines.append(requirement)
+    return "\n".join(lines) + "\n"
 
 
 def build_assignment_specific_files(
@@ -621,11 +689,17 @@ def build_assignment_specific_files(
         )
 
     if language_lower in {"python", "py"} and assignment_mentions_jupyter_notebook(assignment_description):
+        notebook_imports = infer_python_notebook_imports(assignment_description)
         notebook_target = _select_notebook_target(requested_files)
         files[notebook_target] = _build_python_notebook_file(
             assignment_name=assignment_name,
             assignment_summary=assignment_summary,
             function_names=requested_functions,
+            import_lines=notebook_imports,
+        )
+        files["requirements.txt"] = _extend_python_requirements(
+            files.get("requirements.txt", PYTHON_TEMPLATES["requirements.txt"]),
+            infer_python_notebook_requirements(assignment_description),
         )
 
     if requested_functions:

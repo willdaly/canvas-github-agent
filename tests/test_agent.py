@@ -5,6 +5,7 @@ Note: These tests require valid Canvas and GitHub credentials to run fully.
 Mock tests are provided for basic functionality validation.
 """
 import asyncio
+import json
 from datetime import datetime
 from unittest.mock import Mock, patch, AsyncMock
 
@@ -14,6 +15,8 @@ from scaffolding.templates import (
     generate_starter_files,
     get_template_for_language,
     build_agent_fact_card,
+    infer_python_notebook_imports,
+    infer_python_notebook_requirements,
     extract_required_filenames,
     extract_required_function_names,
     normalize_slug,
@@ -144,6 +147,15 @@ class TestTemplates:
             "Implement the functions in main.py and submit your code."
         )
 
+    def test_infer_python_notebook_dependencies_for_bayes_theorem(self):
+        """Infer notebook dependencies for Bayes-theorem assignments."""
+        description = (
+            "Use Bayes theorem to update the posterior after observing the data."
+        )
+
+        assert infer_python_notebook_imports(description) == ["from scipy.stats import beta"]
+        assert infer_python_notebook_requirements(description) == ["scipy>=1.11.0"]
+
     def test_extract_required_function_names(self):
         """Extract required function names from assignment examples."""
         text = (
@@ -229,6 +241,25 @@ class TestTemplates:
         assert '"cell_type": "code"' in files["main.ipynb"]
         assert "def clean_data():" in files["main.ipynb"]
         assert "def build_chart():" in files["main.ipynb"]
+
+    def test_python_bayes_notebook_adds_imports_and_requirement(self):
+        """Bayes-theorem notebook assignments should get a usable stats import."""
+        files = generate_starter_files(
+            assignment_name="Bayes Notebook",
+            assignment_description=(
+                "Submission information: upload a Jupyter notebook. "
+                "Use Bayes theorem to compute a posterior distribution."
+            ),
+            due_date="2026-03-19",
+            language="python",
+        )
+
+        notebook = json.loads(files["main.ipynb"])
+        code_cells = [cell for cell in notebook["cells"] if cell["cell_type"] == "code"]
+
+        assert len(code_cells) == 2
+        assert "from scipy.stats import beta\n" in code_cells[0]["source"]
+        assert "scipy>=1.11.0" in files["requirements.txt"]
 
     def test_python_notebook_uses_explicit_filename(self):
         """Honor an explicit notebook filename from the assignment brief."""
