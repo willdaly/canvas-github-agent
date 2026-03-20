@@ -162,6 +162,8 @@ class TestTemplates:
         assert checked_in["skills"][0]["name"] == "agent_orchestration/task_decomposition"
         assert checked_in["skills"][0]["id"] == 1001
         assert checked_in["locators"][0]["type"] == "source_code"
+        assert checked_in["locators"][1]["type"] == "url"
+        assert checked_in["annotations"]["health_endpoint"] == "http://localhost:8000/health"
 
     def test_extract_required_filenames(self):
         """Extract explicit filenames from assignment instructions."""

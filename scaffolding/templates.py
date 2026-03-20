@@ -2,6 +2,7 @@
 Starter code templates for different types of assignments.
 """
 import json
+import os
 import re
 from html import unescape
 from typing import Any, Dict, List, Optional
@@ -407,9 +408,14 @@ def build_service_fact_card() -> Dict[str, Any]:
     )
 
 
-def build_service_oasf_record() -> Dict[str, Any]:
+def build_service_oasf_record(service_base_url: Optional[str] = None) -> Dict[str, Any]:
     """Build a minimal OASF 1.0.0 record for the current workflow app."""
     source_repository = "https://github.com/willdaly/canvas-github-agent"
+    resolved_service_base_url = (
+        service_base_url
+        or os.getenv("SERVICE_BASE_URL", "http://localhost:8000").strip()
+        or "http://localhost:8000"
+    ).rstrip("/")
     return {
         "name": "Canvas Assignment Workflow",
         "version": "0.1.0",
@@ -449,15 +455,28 @@ def build_service_oasf_record() -> Dict[str, Any]:
                 "type": "source_code",
                 "urls": [source_repository],
             },
+            {
+                "type": "url",
+                "urls": [
+                    f"{resolved_service_base_url}/metadata/oasf-record",
+                    f"{resolved_service_base_url}/capabilities",
+                ],
+            },
         ],
         "annotations": {
             "architecture": "deterministic workflow orchestrator",
+            "api_base_url": resolved_service_base_url,
+            "capabilities_endpoint": f"{resolved_service_base_url}/capabilities",
             "coding_destination": "github",
+            "create_endpoint": f"{resolved_service_base_url}/create",
             "entrypoint": "app/agent.py",
+            "health_endpoint": f"{resolved_service_base_url}/health",
+            "invocation_mode": "synchronous request-response",
             "notebook_support": (
                 "python notebook scaffolding when assignment text explicitly "
                 "requires Jupyter notebook submission"
             ),
+            "result_schema": "task_result_v1",
             "runtime": "python>=3.10",
             "supported_languages": "python,r",
             "writing_destination": "notion",

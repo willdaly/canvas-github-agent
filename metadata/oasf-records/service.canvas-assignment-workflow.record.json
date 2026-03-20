@@ -33,13 +33,26 @@
       "urls": [
         "https://github.com/willdaly/canvas-github-agent"
       ]
+    },
+    {
+      "type": "url",
+      "urls": [
+        "http://localhost:8000/metadata/oasf-record",
+        "http://localhost:8000/capabilities"
+      ]
     }
   ],
   "annotations": {
     "architecture": "deterministic workflow orchestrator",
+    "api_base_url": "http://localhost:8000",
+    "capabilities_endpoint": "http://localhost:8000/capabilities",
     "coding_destination": "github",
+    "create_endpoint": "http://localhost:8000/create",
     "entrypoint": "app/agent.py",
+    "health_endpoint": "http://localhost:8000/health",
+    "invocation_mode": "synchronous request-response",
     "notebook_support": "python notebook scaffolding when assignment text explicitly requires Jupyter notebook submission",
+    "result_schema": "task_result_v1",
     "runtime": "python>=3.10",
     "supported_languages": "python,r",
     "writing_destination": "notion"
