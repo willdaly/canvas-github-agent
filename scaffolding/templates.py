@@ -364,6 +364,64 @@ def build_service_fact_card() -> Dict[str, Any]:
     )
 
 
+def build_service_oasf_record() -> Dict[str, Any]:
+    """Build a minimal OASF 1.0.0 record for the current workflow app."""
+    source_repository = "https://github.com/willdaly/canvas-github-agent"
+    return {
+        "name": "Canvas Assignment Workflow",
+        "version": "0.1.0",
+        "schema_version": "1.0.0",
+        "description": (
+            "Fetches Canvas assignments, infers coding vs writing work, creates "
+            "GitHub repositories for coding assignments, and creates Notion pages "
+            "for writing assignments."
+        ),
+        "authors": ["Will Daly"],
+        "created_at": "2026-03-20T00:00:00Z",
+        "skills": [
+            {"id": 1001, "name": "agent_orchestration/task_decomposition"},
+            {
+                "id": 10101,
+                "name": (
+                    "natural_language_processing/"
+                    "natural_language_understanding/contextual_comprehension"
+                )
+            },
+            {
+                "id": 10301,
+                "name": (
+                    "natural_language_processing/"
+                    "information_retrieval_synthesis/fact_extraction"
+                )
+            },
+        ],
+        "domains": [
+            {
+                "id": 10204,
+                "name": "technology/software_engineering/apis_integration",
+            },
+        ],
+        "locators": [
+            {
+                "type": "source_code",
+                "urls": [source_repository],
+            },
+        ],
+        "annotations": {
+            "architecture": "deterministic workflow orchestrator",
+            "coding_destination": "github",
+            "entrypoint": "app/agent.py",
+            "notebook_support": (
+                "python notebook scaffolding when assignment text explicitly "
+                "requires Jupyter notebook submission"
+            ),
+            "runtime": "python>=3.10",
+            "supported_languages": "python,r",
+            "writing_destination": "notion",
+        },
+    }
+
+
 def extract_required_filenames(assignment_description: str) -> List[str]:
     """Extract explicit required filenames from assignment text."""
     if not assignment_description:

@@ -1,12 +1,13 @@
 """FastAPI server exposing the Canvas assignment workflow orchestrator."""
 import logging
 import os
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
 from app.agent import CanvasGitHubAgent
+from scaffolding.templates import build_service_oasf_record
 from tools.canvas_tools import CanvasTools
 
 
@@ -71,6 +72,16 @@ async def get_assignments(course_id: int):
     except Exception:
         logger.exception("Failed to list assignments for course_id=%s", course_id)
         raise HTTPException(status_code=500, detail="Failed to fetch assignments.")
+
+
+@app.get("/metadata/oasf-record")
+async def get_oasf_record():
+    """Return the service-level OASF record for this workflow app."""
+    try:
+        return build_service_oasf_record()
+    except Exception:
+        logger.exception("Failed to build OASF service record")
+        raise HTTPException(status_code=500, detail="Failed to build OASF record.")
 
 
 @app.post("/create")
