@@ -115,6 +115,8 @@ The `/tasks` endpoints expose an asynchronous `task_status_v1` lifecycle with `q
 
 Course PDFs can be ingested with Docling and indexed into a local Chroma store. During assignment creation, the app will search both indexed course documents and live Canvas module content, then attach the most relevant excerpts to generated outputs.
 
+For explicit maze-search assignments that require `maze_solvers.py`, the generator now emits a working Python maze project with BFS, DFS, A* implementations, a sample maze file, and generated tests instead of only stub functions.
+
 ## MCP Server
 
 The project also exposes an MCP stdio server so other agents and MCP-compatible clients can invoke the workflow directly.

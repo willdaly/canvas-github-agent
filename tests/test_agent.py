@@ -297,11 +297,13 @@ class TestTemplates:
         assert "maze_solver_three" in function_names
 
     def test_assignment_specific_scaffold_files(self):
-        """Generate requested files and solver stubs from assignment brief."""
+        """Generate requested maze files and a working solver project from assignment brief."""
         assignment_description = (
             "The file must be named maze_solvers.py. "
             "The file must include the function names: maze_solver_one, "
             "maze_solver_two and maze_solver_three. "
+            "You must use at least one blind search algorithm and one heuristic search algorithm. "
+            "Your code must be written in Python. "
             "The maze will be stored as a text file. "
             "When you submit all code, include a README file and a report."
         )
@@ -313,11 +315,31 @@ class TestTemplates:
         )
 
         assert "maze_solvers.py" in files
-        assert "def maze_solver_one(maze):" in files["maze_solvers.py"]
-        assert "def maze_solver_two(maze):" in files["maze_solvers.py"]
-        assert "def maze_solver_three(maze):" in files["maze_solvers.py"]
+        assert "main.py" in files
+        assert "tests/test_maze_solvers.py" in files
+        assert "def maze_solver_one(maze: str | Sequence[str]) -> str:" in files["maze_solvers.py"]
+        assert "def maze_solver_two(maze: str | Sequence[str]) -> str:" in files["maze_solvers.py"]
+        assert "def maze_solver_three(maze: str | Sequence[str]) -> str:" in files["maze_solvers.py"]
+        assert "breadth-first search" in files["maze_solvers.py"]
+        assert "A* search" in files["maze_solvers.py"]
+        assert "pytest tests/test_maze_solvers.py" in files["README.md"]
         assert "maze.txt" in files
         assert "Report.md" in files
+
+        namespace: dict[str, object] = {}
+        exec(files["maze_solvers.py"], namespace)
+        solved_bfs = namespace["maze_solver_one"](files["maze.txt"])
+        solved_dfs = namespace["maze_solver_two"](files["maze.txt"])
+        solved_astar = namespace["maze_solver_three"](files["maze.txt"])
+
+        for solved in [solved_bfs, solved_dfs, solved_astar]:
+            assert solved.splitlines()[0] == "5 5"
+            assert "S" in solved
+            assert "E" in solved
+            assert "*" in solved
+
+        assert solved_bfs.count("*") == solved_astar.count("*")
+        assert solved_dfs.count("*") >= solved_bfs.count("*")
 
     def test_python_function_stubs_default_to_main(self):
         """Create Python function stubs in main.py when no source file is named."""
