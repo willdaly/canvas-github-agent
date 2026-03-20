@@ -6,7 +6,7 @@ Mock tests are provided for basic functionality validation.
 """
 import asyncio
 from datetime import datetime
-from unittest.mock import patch, AsyncMock
+from unittest.mock import Mock, patch, AsyncMock
 
 import pytest
 from scaffolding.templates import (
@@ -444,7 +444,7 @@ class TestCanvasGitHubAgent:
             }
 
             agent.create_repository_for_assignment = AsyncMock(return_value=None)
-            agent.create_notion_page_for_assignment = AsyncMock(return_value={
+            agent.create_notion_page_for_assignment_with_mode = AsyncMock(return_value={
                 "page": {"url": "https://notion.so/example"},
                 "assignment": assignment,
             })
@@ -454,11 +454,15 @@ class TestCanvasGitHubAgent:
                     course_id=123,
                     assignment_data=assignment,
                     assignment_type="writing",
+                    notion_content_mode="text",
                 )
             )
 
             agent.create_repository_for_assignment.assert_not_awaited()
-            agent.create_notion_page_for_assignment.assert_awaited_once()
+            agent.create_notion_page_for_assignment_with_mode.assert_awaited_once_with(
+                assignment,
+                content_mode="text",
+            )
             assert result["destination"] == "notion"
 
     def test_run_routes_writing_to_motion(self):
@@ -480,6 +484,33 @@ class TestNotionTools:
             tools = NotionTools()
             assert tools.notion_token == 'test_notion_token'
             assert tools.parent_page_id == 'test_page_id'
+
+    def test_text_mode_uses_single_paragraph_payload(self):
+        """Text mode should avoid adding structured heading/due-date blocks."""
+        from tools.notion_tools import NotionTools
+
+        with patch.dict('os.environ', {
+            'NOTION_TOKEN': 'test_notion_token',
+            'NOTION_PARENT_PAGE_ID': 'test_page_id'
+        }):
+            tools = NotionTools()
+            with patch('tools.notion_tools.requests.post') as post_mock:
+                response_mock = Mock()
+                response_mock.raise_for_status.return_value = None
+                response_mock.json.return_value = {'url': 'https://notion.so/test'}
+                post_mock.return_value = response_mock
+
+                result = tools._create_assignment_page_sync(
+                    title='Writing Assignment',
+                    description='Plain text body',
+                    due_date='2026-03-20',
+                    content_mode='text',
+                )
+
+        assert result == {'url': 'https://notion.so/test'}
+        payload = post_mock.call_args.kwargs['json']
+        assert len(payload['children']) == 1
+        assert payload['children'][0]['type'] == 'paragraph'
 
 
 class TestWorkflowHelpers:

@@ -193,6 +193,14 @@ class CanvasGitHubAgent:
 
     async def create_notion_page_for_assignment(self, assignment: dict) -> Optional[dict]:
         """Create a Notion page for a writing assignment."""
+        return await self.create_notion_page_for_assignment_with_mode(assignment, content_mode="structured")
+
+    async def create_notion_page_for_assignment_with_mode(
+        self,
+        assignment: dict,
+        content_mode: str = "structured",
+    ) -> Optional[dict]:
+        """Create a Notion page for a writing assignment with a chosen content mode."""
         assignment_name = assignment.get("name", "Assignment")
         assignment_description = self.strip_html(assignment.get("description", ""))
         due_at = assignment.get("due_at", "No due date")
@@ -202,6 +210,7 @@ class CanvasGitHubAgent:
             title=assignment_name,
             description=assignment_description,
             due_date=due_at,
+            content_mode=content_mode,
         )
 
         if not page:
@@ -218,6 +227,7 @@ class CanvasGitHubAgent:
         assignment_id: Optional[int] = None,
         language: str = "python",
         assignment_type: Optional[str] = None,
+        notion_content_mode: Optional[str] = None,
         confirm_assignment_type: bool = False,
         assignment_data: Optional[dict] = None,
     ):
@@ -280,7 +290,11 @@ class CanvasGitHubAgent:
                 return None
 
             print("\n📝 Creating Notion page for writing assignment...")
-            result = await self.create_notion_page_for_assignment(assignment)
+            notion_content_mode = notion_content_mode or "structured"
+            result = await self.create_notion_page_for_assignment_with_mode(
+                assignment,
+                content_mode=notion_content_mode,
+            )
 
             if not result or "page" not in result:
                 print("\n❌ Notion page creation failed. See errors above.")

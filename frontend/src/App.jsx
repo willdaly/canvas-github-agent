@@ -12,6 +12,7 @@ export default function App() {
   const [assignmentFilter, setAssignmentFilter] = useState("all");
   const [language, setLanguage] = useState("python");
   const [routeMode, setRouteMode] = useState("auto");
+  const [notionContentMode, setNotionContentMode] = useState("structured");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
@@ -103,6 +104,7 @@ export default function App() {
           assignment_id: selectedAssignment || undefined,
           language: routeMode === "notion" ? undefined : language,
           assignment_type: assignmentType,
+          notion_content_mode: routeMode === "notion" ? notionContentMode : undefined,
         }),
       });
       const data = await parseResponse(res);
@@ -262,13 +264,39 @@ export default function App() {
             )}
 
             {routeMode === "notion" && (
-              <p style={{ marginTop: "0.8rem", marginBottom: 0, color: "#94a3b8", fontSize: 13 }}>
-                Language is skipped for Notion page creation.
-              </p>
+              <div style={{ marginTop: "0.8rem" }}>
+                <p style={{ marginTop: 0, marginBottom: "0.7rem", color: "#94a3b8", fontSize: 13 }}>
+                  Language is skipped for Notion page creation.
+                </p>
+                <div style={{ display: "grid", gap: "0.6rem", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+                  {[
+                    { key: "structured", title: "Structured Page", subtitle: "Title, due date, and formatted assignment notes" },
+                    { key: "text", title: "Text Only", subtitle: "Just paste the assignment text into the page body" },
+                  ].map((option) => (
+                    <button
+                      key={option.key}
+                      onClick={() => setNotionContentMode(option.key)}
+                      style={{
+                        textAlign: "left",
+                        borderRadius: 10,
+                        border: "1px solid",
+                        borderColor: notionContentMode === option.key ? "#14b8a6" : "#334155",
+                        background: notionContentMode === option.key ? "#0f3b3a" : "#1e293b",
+                        padding: "0.75rem 0.85rem",
+                        color: "#e2e8f0",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>{option.title}</div>
+                      <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>{option.subtitle}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
 
             <div style={{ marginTop: "1rem", fontSize: 13, color: "#94a3b8" }}>
-              Route summary: {routeMode === "auto" ? "Auto-detect destination" : routeMode === "github" ? "GitHub (coding)" : "Notion (writing)"}
+              Route summary: {routeMode === "auto" ? "Auto-detect destination" : routeMode === "github" ? "GitHub (coding)" : `Notion (${notionContentMode === "text" ? "text only" : "structured"})`}
             </div>
 
             <button onClick={handleCreate} disabled={!!loading}

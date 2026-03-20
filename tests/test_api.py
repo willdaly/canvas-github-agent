@@ -86,6 +86,25 @@ def test_create_success(monkeypatch):
     assert payload["request"]["course_id"] == 123
 
 
+def test_create_passes_notion_content_mode(monkeypatch):
+    monkeypatch.setattr(api, "CanvasGitHubAgent", StubAgentSuccess)
+    response = asyncio.run(
+        _request(
+            "POST",
+            "/create",
+            {
+                "course_id": 123,
+                "assignment_type": "writing",
+                "notion_content_mode": "text",
+            },
+        )
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["request"]["notion_content_mode"] == "text"
+
+
 def test_create_returns_400_when_agent_returns_none(monkeypatch):
     monkeypatch.setattr(api, "CanvasGitHubAgent", StubAgentNone)
     response = asyncio.run(_request("POST", "/create", {"course_id": 123, "language": "python"}))

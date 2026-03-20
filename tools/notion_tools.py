@@ -20,6 +20,7 @@ class NotionTools:
         title: str,
         description: str,
         due_date: str,
+        content_mode: str = "structured",
     ) -> Optional[Dict[str, Any]]:
         """Synchronous helper to create a Notion page."""
         if not self.notion_token or not self.parent_page_id:
@@ -32,19 +33,23 @@ class NotionTools:
             "Content-Type": "application/json",
         }
 
-        payload = {
-            "parent": {"page_id": self.parent_page_id},
-            "properties": {
-                "title": {
-                    "title": [
+        children = [
+            {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [
                         {
                             "type": "text",
-                            "text": {"content": title[:2000]},
+                            "text": {"content": description[:2000] or "No description provided."},
                         }
                     ]
-                }
+                },
             },
-            "children": [
+        ]
+
+        if content_mode != "text":
+            children = [
                 {
                     "object": "block",
                     "type": "heading_2",
@@ -81,7 +86,21 @@ class NotionTools:
                         ]
                     },
                 },
-            ],
+            ]
+
+        payload = {
+            "parent": {"page_id": self.parent_page_id},
+            "properties": {
+                "title": {
+                    "title": [
+                        {
+                            "type": "text",
+                            "text": {"content": title[:2000]},
+                        }
+                    ]
+                }
+            },
+            "children": children,
         }
 
         try:
@@ -97,6 +116,7 @@ class NotionTools:
         title: str,
         description: str,
         due_date: str,
+        content_mode: str = "structured",
     ) -> Optional[Dict[str, Any]]:
         """Create a Notion page for an assignment."""
         return await asyncio.to_thread(
@@ -104,4 +124,5 @@ class NotionTools:
             title,
             description,
             due_date,
+            content_mode,
         )
