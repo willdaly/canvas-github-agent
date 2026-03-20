@@ -59,7 +59,7 @@ async def interactive_mode():
     
     # Pre-fetch assignment for type inference and confirmation
     agent = CanvasGitHubAgent()
-    assignment = await agent.fetch_assignment_task(course_id, assignment_id)
+    assignment = await agent.fetch_assignment(course_id, assignment_id)
     inferred_type = agent.infer_assignment_type(assignment)
 
     print(f"\nDetected assignment: {assignment.get('name', 'Unknown')}")
