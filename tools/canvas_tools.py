@@ -8,11 +8,12 @@ import re
 import time
 import requests
 from typing import Dict, List, Optional, Any
+from urllib.parse import urljoin, urlparse, unquote
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from contextlib import asynccontextmanager
 
-from scaffolding.templates import html_to_markdown
+from scaffolding.templates import html_to_markdown, normalize_slug
 
 
 class CanvasTools:
@@ -255,6 +256,120 @@ class CanvasTools:
         }
         terms = [term for term in re.findall(r"[a-z0-9]{3,}", query.lower()) if term not in stopwords]
         return list(dict.fromkeys(terms))
+
+    @staticmethod
+    def _extract_links_from_text(text: str) -> list[dict[str, str]]:
+        if not text:
+            return []
+
+        matches: list[dict[str, str]] = []
+        seen: set[str] = set()
+
+        for url, label in re.findall(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', text, flags=re.IGNORECASE | re.DOTALL):
+            clean_url = url.strip()
+            if clean_url and clean_url not in seen:
+                seen.add(clean_url)
+                matches.append({
+                    "url": clean_url,
+                    "label": re.sub(r"<[^>]+>", "", label).strip(),
+                })
+
+        for label, url in re.findall(r'\[([^\]]+)\]\(([^)]+)\)', text):
+            clean_url = url.strip()
+            if clean_url and clean_url not in seen:
+                seen.add(clean_url)
+                matches.append({"url": clean_url, "label": label.strip()})
+
+        for url in re.findall(r'https?://[^\s)>"\']+', text):
+            clean_url = url.rstrip('.,')
+            if clean_url and clean_url not in seen:
+                seen.add(clean_url)
+                matches.append({"url": clean_url, "label": ""})
+
+        return matches
+
+    @staticmethod
+    def _looks_like_maze_link(url: str, label: str) -> bool:
+        haystack = f"{url} {label}".lower()
+        return "maze" in haystack or urlparse(url).path.lower().endswith((".txt", ".maze", ".csv"))
+
+    @staticmethod
+    def _looks_like_maze_text(content: str) -> bool:
+        lines = [line.rstrip("\n") for line in content.splitlines() if line.strip()]
+        if len(lines) < 2:
+            return False
+        if not re.fullmatch(r"\d+\s+\d+", lines[0].strip()):
+            return False
+        body = "\n".join(lines[1:])
+        return "S" in body and "E" in body
+
+    def _resolve_download_url(self, url: str) -> str:
+        return urljoin(f"{self.canvas_url.rstrip('/')}/", url)
+
+    def _download_headers_for_url(self, url: str) -> Dict[str, str]:
+        resolved_host = urlparse(self._resolve_download_url(url)).netloc
+        canvas_host = urlparse(self.canvas_url).netloc
+        if resolved_host == canvas_host and self.canvas_token:
+            return self._canvas_headers()
+        return {}
+
+    @staticmethod
+    def _artifact_repo_path(url: str, label: str, index: int) -> str:
+        basename = os.path.basename(unquote(urlparse(url).path))
+        stem, extension = os.path.splitext(basename)
+        label_hint = label.lower()
+
+        if "report" in label_hint and "maze" in label_hint:
+            stem = "report-maze"
+        elif not stem:
+            stem = normalize_slug(label or f"maze-artifact-{index + 1}") or f"maze-artifact-{index + 1}"
+        else:
+            stem = normalize_slug(stem) or f"maze-artifact-{index + 1}"
+
+        extension = extension.lower() if extension.lower() in {".txt", ".maze", ".csv"} else ".txt"
+        return f"artifacts/{stem}{extension}"
+
+    def download_assignment_maze_artifacts(self, course_id: int, assignment: Dict[str, Any]) -> List[Dict[str, Any]]:
+        links = self._extract_links_from_text(assignment.get("description", ""))
+        artifacts: list[dict[str, Any]] = []
+        seen_paths: set[str] = set()
+
+        for index, link in enumerate(links):
+            raw_url = (link.get("url") or "").strip()
+            label = (link.get("label") or "").strip()
+            if not raw_url or not self._looks_like_maze_link(raw_url, label):
+                continue
+
+            resolved_url = self._resolve_download_url(raw_url)
+            try:
+                response = requests.get(
+                    resolved_url,
+                    headers=self._download_headers_for_url(raw_url),
+                    timeout=30,
+                )
+                response.raise_for_status()
+            except requests.RequestException:
+                continue
+
+            content = response.text.strip()
+            if not content or not self._looks_like_maze_text(content):
+                continue
+
+            repo_path = self._artifact_repo_path(resolved_url, label, index)
+            if repo_path in seen_paths:
+                continue
+            seen_paths.add(repo_path)
+            artifacts.append(
+                {
+                    "course_id": course_id,
+                    "label": label or os.path.basename(repo_path),
+                    "path": repo_path,
+                    "content": content + "\n",
+                    "source_url": resolved_url,
+                }
+            )
+
+        return artifacts
 
     def _build_module_context_entry(
         self,

@@ -312,19 +312,33 @@ class TestTemplates:
             assignment_description=assignment_description,
             due_date="2026-03-11",
             language="python",
+            assignment_artifacts=[
+                {
+                    'path': 'artifacts/report-maze.txt',
+                    'content': '5 5\nS   X\nXX XX\nX   X\nX XXX\nX   E\n',
+                    'source_url': 'https://example.com/report-maze.txt',
+                }
+            ],
         )
 
         assert "maze_solvers.py" in files
         assert "main.py" in files
+        assert "benchmark_maze.py" in files
         assert "tests/test_maze_solvers.py" in files
+        assert "artifacts/report-maze.txt" in files
+        assert "artifacts/README.md" in files
         assert "def maze_solver_one(maze: str | Sequence[str]) -> str:" in files["maze_solvers.py"]
         assert "def maze_solver_two(maze: str | Sequence[str]) -> str:" in files["maze_solvers.py"]
         assert "def maze_solver_three(maze: str | Sequence[str]) -> str:" in files["maze_solvers.py"]
         assert "breadth-first search" in files["maze_solvers.py"]
         assert "A* search" in files["maze_solvers.py"]
         assert "pytest tests/test_maze_solvers.py" in files["README.md"]
+        assert "python benchmark_maze.py" in files["README.md"]
+        assert "report-maze.txt" in files["benchmark_maze.py"]
+        assert "BENCHMARK_RESULTS.md" in files["benchmark_maze.py"]
         assert "maze.txt" in files
         assert "Report.md" in files
+        assert "Generated Benchmark Workflow" in files["Report.md"]
 
         namespace: dict[str, object] = {}
         exec(files["maze_solvers.py"], namespace)
@@ -723,6 +737,42 @@ class TestCanvasTools:
         assert len(result) == 1
         assert result[0]['section_title'] == 'Bayes theorem'
 
+    def test_download_assignment_maze_artifacts_from_description_links(self):
+        """Linked maze text files should be downloaded into repo-ready artifact records."""
+        from tools.canvas_tools import CanvasTools
+
+        assignment = {
+            'description': (
+                '<p>Use the following report maze: '
+                '<a href="/courses/123/files/report_maze.txt">Report Maze</a>.</p>'
+            )
+        }
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_URL': 'https://test.canvas.com',
+            'CANVAS_API_TOKEN': 'test_token',
+        }):
+            tools = CanvasTools()
+
+            with patch('tools.canvas_tools.requests.get') as get_mock:
+                response_mock = Mock()
+                response_mock.raise_for_status.return_value = None
+                response_mock.text = '5 5\nS   X\nXX XX\nX   X\nX XXX\nX   E\n'
+                get_mock.return_value = response_mock
+
+                artifacts = tools.download_assignment_maze_artifacts(123, assignment)
+
+        assert artifacts == [
+            {
+                'course_id': 123,
+                'label': 'Report Maze',
+                'path': 'artifacts/report-maze.txt',
+                'content': '5 5\nS   X\nXX XX\nX   X\nX XXX\nX   E\n',
+                'source_url': 'https://test.canvas.com/courses/123/files/report_maze.txt',
+            }
+        ]
+        get_mock.assert_called_once()
+
 
 class TestGitHubTools:
     """Test GitHub tools (mock tests)."""
@@ -846,8 +896,16 @@ class TestCanvasGitHubAgent:
                     "text": "Section: Bayes Review\n\nPosterior is proportional to prior times likelihood.",
                 }
             ]
+            artifacts = [
+                {
+                    'path': 'artifacts/report-maze.txt',
+                    'content': '5 5\nS   X\nXX XX\nX   X\nX XXX\nX   E\n',
+                    'source_url': 'https://example.com/report-maze.txt',
+                }
+            ]
 
             agent.fetch_course_context = AsyncMock(return_value=context)
+            agent.fetch_assignment_artifacts = AsyncMock(return_value=artifacts)
             agent.create_repository_for_assignment = AsyncMock(return_value={
                 "repository": {"name": "posterior-homework", "owner": {"login": "testuser"}},
                 "files_created": ["README.md", "COURSE_CONTEXT.md"],
@@ -866,6 +924,7 @@ class TestCanvasGitHubAgent:
                 assignment,
                 "python",
                 course_context=context,
+                assignment_artifacts=artifacts,
             )
             assert result["course_context"] == context
 
