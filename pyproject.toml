@@ -17,6 +17,7 @@ dependencies = [
 [project.scripts]
 canvas-github-agent = "app.agent:run"
 canvas-github-agent-cli = "app.cli:run"
+canvas-github-agent-mcp = "app.mcp_server:run"
 
 [project.optional-dependencies]
 dev = [

@@ -111,6 +111,7 @@ def test_get_capabilities_success(monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert payload["service"]["base_url"] == "https://agent.example.com"
+    assert payload["transports"]["mcp_stdio"]["command"] == "canvas-github-agent-mcp"
     assert payload["result_schema"]["name"] == "task_result_v1"
     assert payload["task_schema"]["name"] == "task_status_v1"
     assert payload["operations"][0]["name"] == "list_courses"

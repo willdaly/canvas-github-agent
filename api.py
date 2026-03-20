@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 SERVICE_NAME = "Canvas Assignment Workflow"
 SERVICE_SLUG = "canvas-assignment-workflow"
 SERVICE_VERSION = "0.1.0"
+MCP_SERVER_NAME = "canvas-assignment-workflow"
+MCP_SERVER_COMMAND = "canvas-github-agent-mcp"
 TASK_RESULT_SCHEMA = "task_result_v1"
 TASK_STATUS_SCHEMA = "task_status_v1"
 TASK_STORE: dict[str, dict[str, Any]] = {}
@@ -105,6 +107,21 @@ def build_capabilities_payload() -> dict[str, Any]:
                 "GITHUB_TOKEN for coding assignment flow",
                 "NOTION_TOKEN for writing assignment flow",
             ],
+        },
+        "transports": {
+            "http": {
+                "base_url": base_url,
+                "health_path": "/health",
+                "capabilities_path": "/capabilities",
+            },
+            "mcp_stdio": {
+                "server_name": MCP_SERVER_NAME,
+                "command": MCP_SERVER_COMMAND,
+                "resources": [
+                    "canvas-assignment-workflow://capabilities",
+                    "canvas-assignment-workflow://metadata/oasf-record",
+                ],
+            },
         },
         "routing": {
             "assignment_types": ["coding", "writing"],
