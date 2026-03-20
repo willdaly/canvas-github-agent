@@ -85,6 +85,15 @@ export default function App() {
     return true;
   });
 
+  /** API returns task_result_v1: destination lives under route; links are in artifacts. */
+  const createOutcome = result
+    ? {
+        destination: result.route?.destination ?? result.destination,
+        githubUrl: result.artifacts?.find((a) => a.kind === "github_repository")?.url,
+        notionUrl: result.artifacts?.find((a) => a.kind === "notion_page")?.url,
+      }
+    : null;
+
   async function handleCreate() {
     if (!selectedCourse) return;
     setLoading("create"); setError(""); setResult(null);
@@ -320,23 +329,27 @@ export default function App() {
         )}
 
         {/* Result */}
-        {result && (
+        {result && createOutcome && (
           <Section title="✅ Done!">
             <div style={{ background: "#052e16", border: "1px solid #166534", borderRadius: 8, padding: "1rem" }}>
-              {result.destination === "github" ? (
+              {createOutcome.destination === "github" ? (
                 <>
                   <p style={{ margin: 0, color: "#86efac" }}>🐙 GitHub repo created!</p>
-                  {result.repository?.html_url && (
-                    <a href={result.repository.html_url} target="_blank" rel="noreferrer"
-                      style={{ color: "#6ee7b7", fontSize: 14 }}>{result.repository.html_url}</a>
+                  {createOutcome.githubUrl ? (
+                    <a href={createOutcome.githubUrl} target="_blank" rel="noreferrer"
+                      style={{ color: "#6ee7b7", fontSize: 14 }}>{createOutcome.githubUrl}</a>
+                  ) : (
+                    <p style={{ margin: "8px 0 0", color: "#94a3b8", fontSize: 13 }}>No repository URL in the API response.</p>
                   )}
                 </>
               ) : (
                 <>
                   <p style={{ margin: 0, color: "#86efac" }}>📝 Notion page created!</p>
-                  {result.page?.url && (
-                    <a href={result.page.url} target="_blank" rel="noreferrer"
-                      style={{ color: "#6ee7b7", fontSize: 14 }}>{result.page.url}</a>
+                  {createOutcome.notionUrl ? (
+                    <a href={createOutcome.notionUrl} target="_blank" rel="noreferrer"
+                      style={{ color: "#6ee7b7", fontSize: 14 }}>{createOutcome.notionUrl}</a>
+                  ) : (
+                    <p style={{ margin: "8px 0 0", color: "#94a3b8", fontSize: 13 }}>No page URL in the API response.</p>
                   )}
                 </>
               )}
