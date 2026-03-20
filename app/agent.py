@@ -25,7 +25,7 @@ def infer_assignment_type_from_text(name: str, description: str) -> str:
     coding_keywords = {
         "code", "coding", "program", "programming", "algorithm", "implement",
         "function", "class", "method", "script", "compile", "run", "test",
-        "pytest", "java", "python", "javascript", "c++", "cpp", "repository",
+        "pytest", "python", "rscript", "tidyverse", "ggplot2", "repository",
         "github", "git", "api", "software", "debug", "build",
     }
     writing_keywords = {
@@ -376,7 +376,7 @@ async def main():
     parser.add_argument(
         "--language",
         default="python",
-        choices=["python", "java", "javascript", "cpp"],
+        choices=["python", "r"],
         help="Programming language for starter code (default: python)",
     )
     parser.add_argument(

@@ -51,9 +51,9 @@ async def example_workflow():
     assignment_id = int(assignment_id_input) if assignment_id_input.isdigit() else None
     
     # Step 6: Get language preference
-    print("\nAvailable languages: python, java, javascript, cpp")
+    print("\nAvailable languages: python, r")
     language = input("Enter programming language (default: python): ").strip().lower()
-    if not language or language not in ["python", "java", "javascript", "cpp"]:
+    if not language or language not in ["python", "r"]:
         language = "python"
     
     # Step 7: Create the repository
@@ -86,7 +86,7 @@ async def quick_create_example():
     # TODO: Replace these with your actual IDs from Canvas
     COURSE_ID = 12345  # Replace with your Canvas course ID (e.g., from list-courses)
     ASSIGNMENT_ID = 67890  # Replace with Canvas assignment ID, or set to None for next upcoming
-    LANGUAGE = "python"  # Choose: python, java, javascript, or cpp
+    LANGUAGE = "python"  # Choose: python or r
     
     print("Quick Create Example")
     print("=" * 80)
