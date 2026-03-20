@@ -59,11 +59,13 @@ Set values in .env:
 - COURSE_CONTEXT_CHROMA_PATH (optional; defaults to `.chroma`)
 - COURSE_CONTEXT_COLLECTION (optional; defaults to `course-context`)
 - COURSE_CONTEXT_DEFAULT_LIMIT (optional; defaults to `5`)
+- CANVAS_MODULE_CACHE_TTL_SECONDS (optional; defaults to `300`)
 
 Notes:
 
 - CANVAS_USE_MCP=true uses the Smithery-hosted Canvas MCP server.
 - CANVAS_USE_MCP=false uses direct Canvas REST calls and is recommended for headless server deployments.
+- CANVAS_MODULE_CACHE_TTL_SECONDS controls lightweight in-process caching for Canvas module lookups to reduce repeated API requests.
 
 ## Usage
 

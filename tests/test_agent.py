@@ -544,6 +544,63 @@ class TestCanvasTools:
         assert result == [{'id': 9, 'name': 'Week 1', 'items': []}]
         direct_mock.assert_called_once_with(123)
 
+    def test_get_course_modules_uses_cache_on_repeat_calls(self):
+        """Repeated module listing calls should reuse the in-process cache."""
+        from tools.canvas_tools import CanvasTools
+
+        CanvasTools.clear_shared_cache()
+        try:
+            with patch.dict('os.environ', {
+                'CANVAS_API_URL': 'https://test.canvas.com',
+                'CANVAS_API_TOKEN': 'test_token',
+                'CANVAS_MODULE_CACHE_TTL_SECONDS': '300',
+            }):
+                tools = CanvasTools()
+
+                with patch('tools.canvas_tools.requests.get') as get_mock:
+                    response_mock = Mock()
+                    response_mock.raise_for_status.return_value = None
+                    response_mock.json.return_value = [
+                        {'id': 9, 'name': 'Week 1', 'items': []},
+                    ]
+                    get_mock.return_value = response_mock
+
+                    first = asyncio.run(tools.get_course_modules(123))
+                    second = asyncio.run(tools.get_course_modules(123))
+
+            assert first == second
+            assert get_mock.call_count == 1
+        finally:
+            CanvasTools.clear_shared_cache()
+
+    def test_module_item_context_uses_cache_on_repeat_calls(self):
+        """Repeated module item reads should not refetch cached page content."""
+        from tools.canvas_tools import CanvasTools
+
+        CanvasTools.clear_shared_cache()
+        try:
+            with patch.dict('os.environ', {
+                'CANVAS_API_URL': 'https://test.canvas.com',
+                'CANVAS_API_TOKEN': 'test_token',
+                'CANVAS_MODULE_CACHE_TTL_SECONDS': '300',
+            }):
+                tools = CanvasTools()
+                module = {'id': 9, 'name': 'Week 1'}
+                item = {'id': 11, 'title': 'Bayes page', 'type': 'Page', 'page_url': 'bayes-page'}
+
+                with patch.object(
+                    CanvasTools,
+                    '_direct_get_page',
+                    return_value={'title': 'Bayes page', 'body': '<p>Posterior update explanation.</p>'},
+                ) as page_mock:
+                    first = tools._module_item_to_context(123, module, item)
+                    second = tools._module_item_to_context(123, module, item)
+
+            assert first == second
+            page_mock.assert_called_once_with(123, 'bayes-page')
+        finally:
+            CanvasTools.clear_shared_cache()
+
     def test_search_course_module_context_ranks_relevant_items(self):
         """Module context search should return only relevant ranked items."""
         from tools.canvas_tools import CanvasTools
