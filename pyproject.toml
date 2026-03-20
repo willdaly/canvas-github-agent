@@ -1,12 +1,10 @@
 [project]
 name = "canvas-github-agent"
 version = "0.1.0"
-description = "CrewAI agent that uses canvas-mcp to get assignments and github-mcp to initialize repositories"
+description = "Canvas assignment workflow orchestrator for GitHub and Notion destinations"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "crewai>=0.28.0",
-    "crewai-tools>=0.1.0",
     "mcp>=0.9.0",
     "python-dotenv>=1.0.0",
     "pydantic>=2.0.0",

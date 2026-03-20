@@ -1,9 +1,4 @@
-"""
-FastAPI server to expose CanvasGitHubAgent as a REST API for the frontend.
-Place this file in the root of the canvas-github-agent project.
-Install: pip install fastapi uvicorn
-Run:     uvicorn api:app --reload
-"""
+"""FastAPI server exposing the Canvas assignment workflow orchestrator."""
 import logging
 import os
 
@@ -11,8 +6,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
-from main import CanvasGitHubAgent
-from canvas_tools import CanvasTools
+from app.agent import CanvasGitHubAgent
+from tools.canvas_tools import CanvasTools
 
 
 logger = logging.getLogger(__name__)
@@ -42,15 +37,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Request body for /create ──────────────────────────────────────────────────
 class CreateRequest(BaseModel):
     course_id: int
     assignment_id: Optional[int] = None
     language: str = "python"
     assignment_type: Optional[str] = None  # "coding" or "writing"
 
-
-# ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.get("/courses")
 async def get_courses():

@@ -4,9 +4,11 @@ Tests for Canvas-GitHub Agent
 Note: These tests require valid Canvas and GitHub credentials to run fully.
 Mock tests are provided for basic functionality validation.
 """
-import pytest
 import asyncio
-from unittest.mock import Mock, patch, AsyncMock
+from datetime import datetime
+from unittest.mock import patch, AsyncMock
+
+import pytest
 from scaffolding.templates import (
     generate_starter_files,
     get_template_for_language,
@@ -337,32 +339,6 @@ class TestCanvasGitHubAgent:
             assert agent.github_tools is not None
             assert agent.github_username == 'testuser'
             
-    def test_create_assignment_fetcher_agent(self):
-        """Test creation of assignment fetcher agent."""
-        from app.agent import CanvasGitHubAgent
-        
-        with patch.dict('os.environ', {
-            'CANVAS_API_TOKEN': 'test_token',
-            'GITHUB_TOKEN': 'test_gh_token',
-            'GITHUB_USERNAME': 'testuser'
-        }):
-            agent = CanvasGitHubAgent()
-            fetcher = agent.create_assignment_fetcher_agent()
-            assert fetcher.role == "Assignment Fetcher"
-            
-    def test_create_repository_initializer_agent(self):
-        """Test creation of repository initializer agent."""
-        from app.agent import CanvasGitHubAgent
-        
-        with patch.dict('os.environ', {
-            'CANVAS_API_TOKEN': 'test_token',
-            'GITHUB_TOKEN': 'test_gh_token',
-            'GITHUB_USERNAME': 'testuser'
-        }):
-            agent = CanvasGitHubAgent()
-            initializer = agent.create_repository_initializer_agent()
-            assert initializer.role == "Repository Initializer"
-
     def test_infer_assignment_type_coding(self):
         """Infer coding assignment from assignment text."""
         from app.agent import CanvasGitHubAgent
@@ -411,12 +387,12 @@ class TestCanvasGitHubAgent:
                 "due_at": "2026-03-01"
             }
 
-            agent.create_repository_task = AsyncMock(return_value={
+            agent.create_repository_for_assignment = AsyncMock(return_value={
                 "repository": {"name": "coding-assignment", "owner": {"login": "testuser"}},
                 "files_created": ["README.md"],
                 "assignment": assignment,
             })
-            agent.create_notion_page_task = AsyncMock(return_value=None)
+            agent.create_notion_page_for_assignment = AsyncMock(return_value=None)
 
             result = asyncio.run(
                 agent.run(
@@ -426,8 +402,8 @@ class TestCanvasGitHubAgent:
                 )
             )
 
-            agent.create_repository_task.assert_awaited_once()
-            agent.create_notion_page_task.assert_not_awaited()
+            agent.create_repository_for_assignment.assert_awaited_once()
+            agent.create_notion_page_for_assignment.assert_not_awaited()
             assert result["destination"] == "github"
 
     def test_run_routes_writing_to_notion(self):
@@ -446,8 +422,8 @@ class TestCanvasGitHubAgent:
                 "due_at": "2026-03-01"
             }
 
-            agent.create_repository_task = AsyncMock(return_value=None)
-            agent.create_notion_page_task = AsyncMock(return_value={
+            agent.create_repository_for_assignment = AsyncMock(return_value=None)
+            agent.create_notion_page_for_assignment = AsyncMock(return_value={
                 "page": {"url": "https://notion.so/example"},
                 "assignment": assignment,
             })
@@ -460,8 +436,8 @@ class TestCanvasGitHubAgent:
                 )
             )
 
-            agent.create_repository_task.assert_not_awaited()
-            agent.create_notion_page_task.assert_awaited_once()
+            agent.create_repository_for_assignment.assert_not_awaited()
+            agent.create_notion_page_for_assignment.assert_awaited_once()
             assert result["destination"] == "notion"
 
     def test_run_routes_writing_to_motion(self):
@@ -483,6 +459,95 @@ class TestNotionTools:
             tools = NotionTools()
             assert tools.notion_token == 'test_notion_token'
             assert tools.parent_page_id == 'test_page_id'
+
+
+class TestWorkflowHelpers:
+    """Test pure helper functions used by orchestrator flow."""
+
+    def test_choose_next_assignment_prefers_soonest_upcoming(self):
+        from app.agent import choose_next_assignment
+
+        now = datetime(2026, 3, 19, 12, 0, 0)
+        assignments = [
+            {
+                "id": 1,
+                "name": "Later",
+                "due_at": "2026-03-22T10:00:00",
+                "created_at": "2026-03-10T08:00:00",
+            },
+            {
+                "id": 2,
+                "name": "Sooner",
+                "due_at": "2026-03-20T09:00:00",
+                "created_at": "2026-03-11T08:00:00",
+            },
+        ]
+
+        result = choose_next_assignment(assignments, now=now)
+        assert result["id"] == 2
+
+    def test_choose_next_assignment_falls_back_to_latest_created(self):
+        from app.agent import choose_next_assignment
+
+        now = datetime(2026, 3, 19, 12, 0, 0)
+        assignments = [
+            {
+                "id": 1,
+                "name": "Older",
+                "due_at": "2026-03-01T10:00:00",
+                "created_at": "2026-02-01T08:00:00",
+            },
+            {
+                "id": 2,
+                "name": "Newest",
+                "due_at": None,
+                "created_at": "2026-03-10T08:00:00",
+            },
+        ]
+
+        result = choose_next_assignment(assignments, now=now)
+        assert result["id"] == 2
+
+    def test_fetch_assignment_uses_explicit_assignment_id(self):
+        from app.agent import CanvasGitHubAgent
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_TOKEN': 'test_token',
+            'GITHUB_TOKEN': 'test_gh_token',
+            'GITHUB_USERNAME': 'testuser'
+        }):
+            agent = CanvasGitHubAgent()
+            expected = {"id": 99, "name": "Explicit Assignment"}
+            agent.canvas_tools.get_assignment_details = AsyncMock(return_value=expected)
+            agent.canvas_tools.get_course_assignments = AsyncMock(return_value=[])
+
+            result = asyncio.run(agent.fetch_assignment(course_id=123, assignment_id=99))
+
+            agent.canvas_tools.get_assignment_details.assert_awaited_once_with(123, 99)
+            agent.canvas_tools.get_course_assignments.assert_not_awaited()
+            assert result == expected
+
+    def test_get_missing_notion_config(self):
+        from app.agent import get_missing_notion_config
+
+        missing = get_missing_notion_config({"NOTION_TOKEN": "abc"})
+        assert missing == ["NOTION_PARENT_PAGE_ID"]
+
+    def test_validate_notion_config(self):
+        from app.agent import CanvasGitHubAgent
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_TOKEN': 'test_token',
+            'GITHUB_TOKEN': 'test_gh_token',
+            'GITHUB_USERNAME': 'testuser',
+            'NOTION_TOKEN': '',
+            'NOTION_PARENT_PAGE_ID': ''
+        }, clear=False):
+            agent = CanvasGitHubAgent()
+            missing = agent.validate_notion_config()
+
+        assert "NOTION_TOKEN" in missing
+        assert "NOTION_PARENT_PAGE_ID" in missing
 
 
 if __name__ == "__main__":
