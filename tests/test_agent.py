@@ -163,6 +163,8 @@ class TestTemplates:
         assert checked_in["skills"][0]["id"] == 1001
         assert checked_in["locators"][0]["type"] == "source_code"
         assert checked_in["locators"][1]["type"] == "url"
+        assert checked_in["annotations"]["task_submission_endpoint"] == "http://localhost:8000/tasks"
+        assert checked_in["annotations"]["task_status_schema"] == "task_status_v1"
         assert checked_in["annotations"]["health_endpoint"] == "http://localhost:8000/health"
 
     def test_extract_required_filenames(self):

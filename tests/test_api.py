@@ -1,4 +1,5 @@
 import asyncio
+from uuid import UUID
 
 from httpx import ASGITransport, AsyncClient
 
@@ -69,6 +70,14 @@ class StubAgentError:
         raise RuntimeError("sensitive github failure")
 
 
+class StubTaskScheduler:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, task_id, req):
+        self.calls.append((task_id, req))
+
+
 def test_get_oasf_record_success(monkeypatch):
     monkeypatch.setattr(
         api,
@@ -103,7 +112,75 @@ def test_get_capabilities_success(monkeypatch):
     payload = response.json()
     assert payload["service"]["base_url"] == "https://agent.example.com"
     assert payload["result_schema"]["name"] == "task_result_v1"
+    assert payload["task_schema"]["name"] == "task_status_v1"
     assert payload["operations"][0]["name"] == "list_courses"
+
+
+def test_submit_task_returns_queued_task(monkeypatch):
+    api.TASK_STORE.clear()
+    scheduler = StubTaskScheduler()
+    monkeypatch.setattr(api, "_schedule_task_execution", scheduler)
+
+    response = asyncio.run(
+        _request(
+            "POST",
+            "/tasks",
+            {
+                "course_id": 123,
+                "assignment_id": 777,
+                "language": "python",
+                "assignment_type": "coding",
+            },
+        )
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    UUID(payload["task_id"])
+    assert payload["status"] == "queued"
+    assert payload["request"]["course_id"] == 123
+    assert payload["result"] is None
+    assert payload["error"] is None
+    assert len(scheduler.calls) == 1
+
+
+def test_get_task_returns_existing_task():
+    api.TASK_STORE.clear()
+    api.TASK_STORE["task-123"] = {
+        "task_id": "task-123",
+        "status": "queued",
+        "service": {
+            "name": "Canvas Assignment Workflow",
+            "slug": "canvas-assignment-workflow",
+            "version": "0.1.0",
+        },
+        "request": {
+            "course_id": 123,
+            "assignment_id": 777,
+            "language": "python",
+            "assignment_type": "coding",
+            "notion_content_mode": None,
+        },
+        "submitted_at": "2026-03-20T00:00:00Z",
+        "started_at": None,
+        "completed_at": None,
+        "failed_at": None,
+        "result": None,
+        "error": None,
+    }
+
+    response = asyncio.run(_request("GET", "/tasks/task-123"))
+
+    assert response.status_code == 200
+    assert response.json()["task_id"] == "task-123"
+
+
+def test_get_task_returns_404_for_unknown_task():
+    api.TASK_STORE.clear()
+    response = asyncio.run(_request("GET", "/tasks/missing-task"))
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Task not found."
 
 
 def test_get_oasf_record_sanitizes_internal_errors(monkeypatch):
@@ -215,3 +292,63 @@ def test_create_sanitizes_internal_errors(monkeypatch):
 
     assert response.status_code == 500
     assert response.json()["detail"] == "Failed to create destination."
+
+
+def test_execute_task_completes_successfully(monkeypatch):
+    api.TASK_STORE.clear()
+    monkeypatch.setattr(api, "CanvasGitHubAgent", StubAgentSuccess)
+    req = api.CreateRequest(
+        course_id=123,
+        assignment_id=777,
+        language="python",
+        assignment_type="coding",
+    )
+    api.TASK_STORE["task-success"] = api._build_task_status(
+        task_id="task-success",
+        request=api._request_payload(req),
+        status="queued",
+        submitted_at="2026-03-20T00:00:00Z",
+    )
+
+    asyncio.run(api._execute_task("task-success", req))
+
+    task = api.TASK_STORE["task-success"]
+    assert task["status"] == "completed"
+    assert task["result"]["route"]["destination"] == "github"
+    assert task["completed_at"] is not None
+
+
+def test_execute_task_marks_failure_when_agent_returns_none(monkeypatch):
+    api.TASK_STORE.clear()
+    monkeypatch.setattr(api, "CanvasGitHubAgent", StubAgentNone)
+    req = api.CreateRequest(course_id=123, language="python")
+    api.TASK_STORE["task-none"] = api._build_task_status(
+        task_id="task-none",
+        request=api._request_payload(req),
+        status="queued",
+        submitted_at="2026-03-20T00:00:00Z",
+    )
+
+    asyncio.run(api._execute_task("task-none", req))
+
+    task = api.TASK_STORE["task-none"]
+    assert task["status"] == "failed"
+    assert task["error"]["code"] == "destination_creation_failed"
+
+
+def test_execute_task_marks_failure_on_internal_error(monkeypatch):
+    api.TASK_STORE.clear()
+    monkeypatch.setattr(api, "CanvasGitHubAgent", StubAgentError)
+    req = api.CreateRequest(course_id=123, language="python")
+    api.TASK_STORE["task-error"] = api._build_task_status(
+        task_id="task-error",
+        request=api._request_payload(req),
+        status="queued",
+        submitted_at="2026-03-20T00:00:00Z",
+    )
+
+    asyncio.run(api._execute_task("task-error", req))
+
+    task = api.TASK_STORE["task-error"]
+    assert task["status"] == "failed"
+    assert task["error"]["code"] == "internal_execution_error"

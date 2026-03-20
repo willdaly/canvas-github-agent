@@ -471,7 +471,7 @@ def build_service_oasf_record(service_base_url: Optional[str] = None) -> Dict[st
             "create_endpoint": f"{resolved_service_base_url}/create",
             "entrypoint": "app/agent.py",
             "health_endpoint": f"{resolved_service_base_url}/health",
-            "invocation_mode": "synchronous request-response",
+            "invocation_mode": "supports synchronous request-response and asynchronous task polling",
             "notebook_support": (
                 "python notebook scaffolding when assignment text explicitly "
                 "requires Jupyter notebook submission"
@@ -479,6 +479,9 @@ def build_service_oasf_record(service_base_url: Optional[str] = None) -> Dict[st
             "result_schema": "task_result_v1",
             "runtime": "python>=3.10",
             "supported_languages": "python,r",
+            "task_status_endpoint": f"{resolved_service_base_url}/tasks/{{task_id}}",
+            "task_status_schema": "task_status_v1",
+            "task_submission_endpoint": f"{resolved_service_base_url}/tasks",
             "writing_destination": "notion",
         },
     }

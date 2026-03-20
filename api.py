@@ -1,11 +1,15 @@
 """FastAPI server exposing the Canvas assignment workflow orchestrator."""
+import asyncio
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Any, Optional
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
 from app.agent import CanvasGitHubAgent
 from scaffolding.templates import build_service_oasf_record
 from tools.canvas_tools import CanvasTools
@@ -16,6 +20,9 @@ logger = logging.getLogger(__name__)
 SERVICE_NAME = "Canvas Assignment Workflow"
 SERVICE_SLUG = "canvas-assignment-workflow"
 SERVICE_VERSION = "0.1.0"
+TASK_RESULT_SCHEMA = "task_result_v1"
+TASK_STATUS_SCHEMA = "task_status_v1"
+TASK_STORE: dict[str, dict[str, Any]] = {}
 
 
 def get_allowed_origins() -> list[str]:
@@ -78,6 +85,18 @@ def build_capabilities_payload() -> dict[str, Any]:
                     "Notion page for writing assignments."
                 ),
             },
+            {
+                "name": "submit_task",
+                "method": "POST",
+                "path": "/tasks",
+                "description": "Queue assignment provisioning work for asynchronous execution.",
+            },
+            {
+                "name": "get_task_status",
+                "method": "GET",
+                "path": "/tasks/{task_id}",
+                "description": "Fetch the current status and result of a submitted task.",
+            },
         ],
         "authentication": {
             "service": "none",
@@ -93,7 +112,7 @@ def build_capabilities_payload() -> dict[str, Any]:
             "supported_languages": ["python", "r"],
         },
         "result_schema": {
-            "name": "task_result_v1",
+            "name": TASK_RESULT_SCHEMA,
             "top_level_fields": [
                 "status",
                 "service",
@@ -104,7 +123,26 @@ def build_capabilities_payload() -> dict[str, Any]:
                 "details",
             ],
         },
+        "task_schema": {
+            "name": TASK_STATUS_SCHEMA,
+            "top_level_fields": [
+                "task_id",
+                "status",
+                "service",
+                "request",
+                "submitted_at",
+                "started_at",
+                "completed_at",
+                "failed_at",
+                "result",
+                "error",
+            ],
+        },
     }
+
+
+def _utcnow_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _summarize_assignment(assignment: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
@@ -117,6 +155,16 @@ def _summarize_assignment(assignment: Optional[dict[str, Any]]) -> Optional[dict
         "due_at": assignment.get("due_at"),
         "workflow_state": assignment.get("workflow_state"),
         "is_completed": assignment.get("is_completed"),
+    }
+
+
+def _request_payload(req: "CreateRequest") -> dict[str, Any]:
+    return {
+        "course_id": req.course_id,
+        "assignment_id": req.assignment_id,
+        "language": req.language,
+        "assignment_type": req.assignment_type,
+        "notion_content_mode": req.notion_content_mode,
     }
 
 
@@ -157,13 +205,7 @@ def _build_task_response(req: "CreateRequest", result: dict[str, Any]) -> dict[s
             "slug": SERVICE_SLUG,
             "version": SERVICE_VERSION,
         },
-        "request": {
-            "course_id": req.course_id,
-            "assignment_id": req.assignment_id,
-            "language": req.language,
-            "assignment_type": req.assignment_type,
-            "notion_content_mode": req.notion_content_mode,
-        },
+        "request": _request_payload(req),
         "route": {
             "assignment_type": assignment_type,
             "destination": destination,
@@ -180,9 +222,83 @@ def _build_task_response(req: "CreateRequest", result: dict[str, Any]) -> dict[s
     }
 
 
+def _build_task_status(
+    *,
+    task_id: str,
+    request: dict[str, Any],
+    status: str,
+    submitted_at: str,
+    started_at: Optional[str] = None,
+    completed_at: Optional[str] = None,
+    failed_at: Optional[str] = None,
+    result: Optional[dict[str, Any]] = None,
+    error: Optional[dict[str, str]] = None,
+) -> dict[str, Any]:
+    return {
+        "task_id": task_id,
+        "status": status,
+        "service": {
+            "name": SERVICE_NAME,
+            "slug": SERVICE_SLUG,
+            "version": SERVICE_VERSION,
+        },
+        "request": request,
+        "submitted_at": submitted_at,
+        "started_at": started_at,
+        "completed_at": completed_at,
+        "failed_at": failed_at,
+        "result": result,
+        "error": error,
+    }
+
+
+def _schedule_task_execution(task_id: str, req: "CreateRequest") -> None:
+    asyncio.create_task(_execute_task(task_id, req))
+
+
+async def _execute_task(task_id: str, req: "CreateRequest") -> None:
+    task = TASK_STORE.get(task_id)
+    if not task:
+        return
+
+    task["status"] = "running"
+    task["started_at"] = _utcnow_iso()
+    task["error"] = None
+
+    try:
+        agent = CanvasGitHubAgent()
+        result = await agent.run(
+            course_id=req.course_id,
+            assignment_id=req.assignment_id,
+            language=req.language,
+            assignment_type=req.assignment_type,
+            notion_content_mode=req.notion_content_mode,
+        )
+
+        if not result:
+            task["status"] = "failed"
+            task["failed_at"] = _utcnow_iso()
+            task["error"] = {
+                "code": "destination_creation_failed",
+                "message": "Agent failed to create destination.",
+            }
+            return
+
+        task["status"] = "completed"
+        task["completed_at"] = _utcnow_iso()
+        task["result"] = _build_task_response(req, result)
+    except Exception:
+        logger.exception("Failed to execute task_id=%s", task_id)
+        task["status"] = "failed"
+        task["failed_at"] = _utcnow_iso()
+        task["error"] = {
+            "code": "internal_execution_error",
+            "message": "Task execution failed.",
+        }
+
+
 app = FastAPI(title="Canvas Assignment Agent API")
 
-# Allow React frontend to talk to this server
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_allowed_origins(),
@@ -190,12 +306,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 class CreateRequest(BaseModel):
     course_id: int
     assignment_id: Optional[int] = None
     language: str = "python"
-    assignment_type: Optional[str] = None  # "coding" or "writing"
-    notion_content_mode: Optional[str] = None  # "structured" or "text"
+    assignment_type: Optional[str] = None
+    notion_content_mode: Optional[str] = None
 
 
 @app.get("/health")
@@ -212,6 +329,29 @@ async def get_health():
 async def get_capabilities():
     """Return a stable service capability description."""
     return build_capabilities_payload()
+
+
+@app.post("/tasks", status_code=202)
+async def submit_task(req: CreateRequest):
+    """Queue assignment destination creation for asynchronous execution."""
+    task_id = str(uuid4())
+    TASK_STORE[task_id] = _build_task_status(
+        task_id=task_id,
+        request=_request_payload(req),
+        status="queued",
+        submitted_at=_utcnow_iso(),
+    )
+    _schedule_task_execution(task_id, req)
+    return TASK_STORE[task_id]
+
+
+@app.get("/tasks/{task_id}")
+async def get_task(task_id: str):
+    """Return the status of a previously submitted task."""
+    task = TASK_STORE.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    return task
 
 
 @app.get("/courses")
@@ -254,10 +394,7 @@ async def get_oasf_record():
 
 @app.post("/create")
 async def create_destination(req: CreateRequest):
-    """
-    Create a GitHub repo (coding) or Notion page (writing) for an assignment.
-    The agent auto-detects coding vs writing if assignment_type is not provided.
-    """
+    """Synchronously create the destination for a Canvas assignment."""
     try:
         agent = CanvasGitHubAgent()
         result = await agent.run(

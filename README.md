@@ -88,8 +88,12 @@ canvas-github-agent create-repo --course-id 12345 --confirm-type
 - GET /courses/{course_id}/assignments
 - GET /metadata/oasf-record
 - POST /create
+- POST /tasks
+- GET /tasks/{task_id}
 
 The `/create` endpoint returns a stable `task_result_v1` payload with service, request, route, assignment, artifacts, and details fields.
+
+The `/tasks` endpoints expose an asynchronous `task_status_v1` lifecycle with `queued`, `running`, `completed`, and `failed` states.
 
 ## Frontend
 
