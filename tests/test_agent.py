@@ -574,7 +574,7 @@ class TestCanvasTools:
             CanvasTools.clear_shared_cache()
 
     def test_module_item_context_uses_cache_on_repeat_calls(self):
-        """Repeated module item reads should not refetch cached page content."""
+        """Repeated module item reads should not trigger repeated Canvas fetches."""
         from tools.canvas_tools import CanvasTools
 
         CanvasTools.clear_shared_cache()
@@ -588,16 +588,74 @@ class TestCanvasTools:
                 module = {'id': 9, 'name': 'Week 1'}
                 item = {'id': 11, 'title': 'Bayes page', 'type': 'Page', 'page_url': 'bayes-page'}
 
-                with patch.object(
-                    CanvasTools,
-                    '_direct_get_page',
-                    return_value={'title': 'Bayes page', 'body': '<p>Posterior update explanation.</p>'},
-                ) as page_mock:
+                with patch('tools.canvas_tools.requests.get') as get_mock:
+                    response_mock = Mock()
+                    response_mock.raise_for_status.return_value = None
+                    response_mock.json.return_value = {
+                        'title': 'Bayes page',
+                        'body': '<p>Posterior update explanation.</p>',
+                    }
+                    get_mock.return_value = response_mock
+
                     first = tools._module_item_to_context(123, module, item)
                     second = tools._module_item_to_context(123, module, item)
 
             assert first == second
-            page_mock.assert_called_once_with(123, 'bayes-page')
+            assert get_mock.call_count == 1
+        finally:
+            CanvasTools.clear_shared_cache()
+
+    def test_module_item_context_cache_misses_when_revision_changes(self):
+        """Revision hints should force a refresh before TTL expiry when content changes."""
+        from tools.canvas_tools import CanvasTools
+
+        CanvasTools.clear_shared_cache()
+        try:
+            with patch.dict('os.environ', {
+                'CANVAS_API_URL': 'https://test.canvas.com',
+                'CANVAS_API_TOKEN': 'test_token',
+                'CANVAS_MODULE_CACHE_TTL_SECONDS': '300',
+            }):
+                tools = CanvasTools()
+                module = {'id': 9, 'name': 'Week 1'}
+                first_item = {
+                    'id': 11,
+                    'title': 'Bayes page',
+                    'type': 'Page',
+                    'page_url': 'bayes-page',
+                    'updated_at': '2026-03-20T12:00:00Z',
+                }
+                second_item = {
+                    'id': 11,
+                    'title': 'Bayes page',
+                    'type': 'Page',
+                    'page_url': 'bayes-page',
+                    'updated_at': '2026-03-20T12:30:00Z',
+                }
+
+                with patch('tools.canvas_tools.requests.get') as get_mock:
+                    response_one = Mock()
+                    response_one.raise_for_status.return_value = None
+                    response_one.json.return_value = {
+                        'title': 'Bayes page',
+                        'updated_at': '2026-03-20T12:00:00Z',
+                        'body': '<p>Posterior update explanation.</p>',
+                    }
+                    response_two = Mock()
+                    response_two.raise_for_status.return_value = None
+                    response_two.json.return_value = {
+                        'title': 'Bayes page',
+                        'updated_at': '2026-03-20T12:30:00Z',
+                        'body': '<p>Posterior update explanation with new note.</p>',
+                    }
+                    get_mock.side_effect = [response_one, response_two]
+
+                    first = tools._module_item_to_context(123, module, first_item)
+                    second = tools._module_item_to_context(123, module, second_item)
+
+            assert first != second
+            assert 'new note' in second['text']
+            assert get_mock.call_count == 2
         finally:
             CanvasTools.clear_shared_cache()
 
