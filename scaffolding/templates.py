@@ -310,6 +310,60 @@ def build_agent_fact_card(
     }
 
 
+def build_service_fact_card() -> Dict[str, Any]:
+    """Build the service-level fact card for the current workflow app."""
+    return build_agent_fact_card(
+        agent_id="canvas-assignment-workflow",
+        agent_name="Canvas Assignment Workflow",
+        summary=(
+            "Fetches Canvas assignments, infers coding vs writing work, creates "
+            "GitHub repositories for coding assignments, and creates Notion pages "
+            "for writing assignments."
+        ),
+        domain="education automation",
+        capabilities=[
+            "list_courses",
+            "list_assignments",
+            "fetch_assignment",
+            "infer_assignment_type",
+            "create_github_repository",
+            "generate_starter_files",
+            "create_notion_page",
+        ],
+        registry_url="https://index.projectnanda.org",
+        source_repository="https://github.com/willdaly/canvas-github-agent",
+        metadata={
+            "version": "0.1.0",
+            "runtime": "python>=3.10",
+            "entrypoint": "app/agent.py",
+            "architecture": "deterministic workflow orchestrator",
+            "inputs": [
+                "course_id",
+                "assignment_id (optional)",
+                "language",
+                "assignment_type (optional)",
+                "notion_content_mode (optional)",
+            ],
+            "outputs": [
+                "github repository metadata and URL for coding assignments",
+                "notion page metadata and URL for writing assignments",
+            ],
+            "tools_used": [
+                "CanvasTools",
+                "GitHubTools",
+                "NotionTools",
+            ],
+            "constraints": [
+                "requires Canvas credentials",
+                "requires GitHub credentials for coding assignment flow",
+                "requires Notion credentials for writing assignment flow",
+            ],
+            "supported_languages": ["python", "r"],
+            "notebook_support": "python notebook scaffolding for assignments that explicitly require Jupyter notebook submission",
+        },
+    )
+
+
 def extract_required_filenames(assignment_description: str) -> List[str]:
     """Extract explicit required filenames from assignment text."""
     if not assignment_description:

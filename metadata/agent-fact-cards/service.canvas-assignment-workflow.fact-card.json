@@ -1,0 +1,57 @@
+{
+  "schema_version": "0.1-draft",
+  "agent_id": "canvas-assignment-workflow",
+  "name": "Canvas Assignment Workflow",
+  "summary": "Fetches Canvas assignments, infers coding vs writing work, creates GitHub repositories for coding assignments, and creates Notion pages for writing assignments.",
+  "domain": "education automation",
+  "capabilities": [
+    "list_courses",
+    "list_assignments",
+    "fetch_assignment",
+    "infer_assignment_type",
+    "create_github_repository",
+    "generate_starter_files",
+    "create_notion_page"
+  ],
+  "interoperability": {
+    "a2a": "@agent-id",
+    "mcp": "#registry:server-name"
+  },
+  "registry": {
+    "url": "https://index.projectnanda.org",
+    "status": "not_registered"
+  },
+  "source_repository": "https://github.com/willdaly/canvas-github-agent",
+  "metadata": {
+    "version": "0.1.0",
+    "runtime": "python>=3.10",
+    "entrypoint": "app/agent.py",
+    "architecture": "deterministic workflow orchestrator",
+    "inputs": [
+      "course_id",
+      "assignment_id (optional)",
+      "language",
+      "assignment_type (optional)",
+      "notion_content_mode (optional)"
+    ],
+    "outputs": [
+      "github repository metadata and URL for coding assignments",
+      "notion page metadata and URL for writing assignments"
+    ],
+    "tools_used": [
+      "CanvasTools",
+      "GitHubTools",
+      "NotionTools"
+    ],
+    "constraints": [
+      "requires Canvas credentials",
+      "requires GitHub credentials for coding assignment flow",
+      "requires Notion credentials for writing assignment flow"
+    ],
+    "supported_languages": [
+      "python",
+      "r"
+    ],
+    "notebook_support": "python notebook scaffolding for assignments that explicitly require Jupyter notebook submission"
+  }
+}
