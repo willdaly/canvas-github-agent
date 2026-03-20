@@ -284,6 +284,54 @@ class TestTemplates:
         assert "pandas>=2.2.0" in files["requirements.txt"]
         assert "matplotlib>=3.8.0" in files["requirements.txt"]
 
+    def test_non_maze_report_template_uses_generic_sections(self):
+        """Generic report assignments should not receive the maze report template."""
+        files = generate_starter_files(
+            assignment_name="Data Story Summary",
+            assignment_description="Write a report that summarizes your findings and recommendations.",
+            due_date="2026-03-19",
+            language="python",
+        )
+
+        assert "Report.md" in files
+        assert "## Executive Summary" in files["Report.md"]
+        assert "## Problem Statement" in files["Report.md"]
+        assert "Introduction to Search Algorithms" not in files["Report.md"]
+
+    def test_ml_project_scaffold_files(self):
+        """ML project briefs should generate a project-oriented NSL-KDD scaffold."""
+        assignment_description = (
+            "ML Group Project. Use the NSL-KDD dataset imported from kagglehub. "
+            "Complete an EDA, build machine learning models, write a report, and prepare a presentation."
+        )
+        files = generate_starter_files(
+            assignment_name="Malware and Network Intrusion Detection and Analysis",
+            assignment_description=assignment_description,
+            due_date="2026-03-20",
+            language="python",
+        )
+
+        assert "Report.md" in files
+        assert "PRESENTATION.md" in files
+        assert "src/__init__.py" in files
+        assert "src/data_loader.py" in files
+        assert "src/eda.py" in files
+        assert "src/train_models.py" in files
+        assert "tests/test_ml_project.py" in files
+        assert "NSL-KDD" in files["Report.md"]
+        assert "## EDA Workflow" in files["Report.md"]
+        assert "kagglehub" in files["src/data_loader.py"]
+        assert "NSL_KDD_COLUMNS" in files["src/data_loader.py"]
+        assert "RandomForestClassifier" in files["src/train_models.py"]
+        assert "LogisticRegression" in files["src/train_models.py"]
+        assert "python main.py" in files["README.md"]
+        assert "PRESENTATION.md" in files["README.md"]
+        assert "kagglehub>=0.3.0" in files["requirements.txt"]
+        assert "scikit-learn>=1.4.0" in files["requirements.txt"]
+
+        for path in ["main.py", "src/data_loader.py", "src/eda.py", "src/train_models.py", "tests/test_ml_project.py"]:
+            compile(files[path], path, "exec")
+
     def test_extract_required_function_names(self):
         """Extract required function names from assignment examples."""
         text = (

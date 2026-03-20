@@ -117,6 +117,8 @@ Course PDFs can be ingested with Docling and indexed into a local Chroma store. 
 
 For explicit maze-search assignments that require `maze_solvers.py`, the generator now emits a working Python maze project with BFS, DFS, A* implementations, a benchmark script, a sample maze file, generated tests, and downloaded linked maze artifacts when the assignment brief exposes maze text files.
 
+For ML project briefs, the generator now produces a project-oriented Python scaffold with a tailored report template, a presentation outline, NSL-KDD plus `kagglehub` starter code, EDA helpers, baseline model-training scripts, and validation tests instead of only the generic `main.py` placeholder.
+
 ## MCP Server
 
 The project also exposes an MCP stdio server so other agents and MCP-compatible clients can invoke the workflow directly.
