@@ -63,6 +63,27 @@ async def list_assignments(course_id: int) -> dict[str, Any]:
         _raise_tool_error(exc)
 
 
+@server.tool(description="List Canvas modules and module items for a course.")
+async def list_course_modules(course_id: int) -> dict[str, Any]:
+    """Return Canvas modules for a course."""
+    try:
+        return await api.get_modules(course_id)
+    except HTTPException as exc:
+        _raise_tool_error(exc)
+
+
+@server.tool(description="Search Canvas course module content for assignment-relevant context.")
+async def search_course_modules(course_id: int, query: str, limit: int = 5) -> dict[str, Any]:
+    """Search Canvas module content for relevant context."""
+    try:
+        return await api.search_course_modules(
+            course_id,
+            api.CourseContextSearchRequest(query=query, limit=limit),
+        )
+    except HTTPException as exc:
+        _raise_tool_error(exc)
+
+
 @server.tool(description="Return the service capabilities payload used for discovery.")
 async def get_capabilities() -> dict[str, Any]:
     """Return service capabilities and transport metadata."""

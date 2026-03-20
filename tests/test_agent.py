@@ -146,6 +146,7 @@ class TestTemplates:
         assert checked_in["metadata"]["architecture"] == "deterministic workflow orchestrator"
         assert checked_in["interoperability"]["mcp"] == "canvas-github-agent-mcp"
         assert checked_in["metadata"]["course_context_backend"] == "chroma"
+        assert "canvas_modules" in checked_in["metadata"]["course_context_sources"]
 
     def test_build_service_oasf_record_matches_checked_in_json(self):
         """The checked-in OASF record should match the generated payload."""
@@ -167,6 +168,7 @@ class TestTemplates:
         assert checked_in["locators"][0]["type"] == "source_code"
         assert checked_in["locators"][1]["type"] == "url"
         assert checked_in["annotations"]["course_context_backend"] == "chroma"
+        assert checked_in["annotations"]["course_module_search_endpoint"] == "http://localhost:8000/courses/{course_id}/modules/search"
         assert checked_in["annotations"]["mcp_stdio_command"] == "canvas-github-agent-mcp"
         assert checked_in["annotations"]["task_submission_endpoint"] == "http://localhost:8000/tasks"
         assert checked_in["annotations"]["task_status_schema"] == "task_status_v1"
@@ -521,6 +523,69 @@ class TestCanvasTools:
         assert assignment['workflow_state'] == 'submitted'
         assert assignment['submitted_at'] == '2026-03-18T11:00:00Z'
 
+    def test_get_course_modules_uses_direct_api(self):
+        """Module listing should use the direct Canvas REST path."""
+        from tools.canvas_tools import CanvasTools
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_URL': 'https://test.canvas.com',
+            'CANVAS_API_TOKEN': 'test_token',
+            'CANVAS_USE_MCP': 'true'
+        }):
+            tools = CanvasTools()
+
+            with patch.object(
+                CanvasTools,
+                '_direct_get_course_modules',
+                return_value=[{'id': 9, 'name': 'Week 1', 'items': []}],
+            ) as direct_mock:
+                result = asyncio.run(tools.get_course_modules(123))
+
+        assert result == [{'id': 9, 'name': 'Week 1', 'items': []}]
+        direct_mock.assert_called_once_with(123)
+
+    def test_search_course_module_context_ranks_relevant_items(self):
+        """Module context search should return only relevant ranked items."""
+        from tools.canvas_tools import CanvasTools
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_URL': 'https://test.canvas.com',
+            'CANVAS_API_TOKEN': 'test_token',
+        }):
+            tools = CanvasTools()
+            modules = [
+                {
+                    'id': 9,
+                    'name': 'Week 4',
+                    'items': [
+                        {'id': 11, 'title': 'Bayes page', 'type': 'Page'},
+                        {'id': 12, 'title': 'Decision trees', 'type': 'Page'},
+                    ],
+                }
+            ]
+            contexts = [
+                {
+                    'document_name': 'Canvas Module: Week 4',
+                    'section_title': 'Bayes theorem',
+                    'text': 'Posterior update uses Bayes theorem.',
+                },
+                {
+                    'document_name': 'Canvas Module: Week 4',
+                    'section_title': 'Decision trees',
+                    'text': 'Entropy and information gain.',
+                },
+            ]
+
+            with patch.object(CanvasTools, '_direct_get_course_modules', return_value=modules), patch.object(
+                CanvasTools,
+                '_module_item_to_context',
+                side_effect=contexts,
+            ):
+                result = asyncio.run(tools.search_course_module_context(123, 'posterior update', limit=2))
+
+        assert len(result) == 1
+        assert result[0]['section_title'] == 'Bayes theorem'
+
 
 class TestGitHubTools:
     """Test GitHub tools (mock tests)."""
@@ -666,6 +731,51 @@ class TestCanvasGitHubAgent:
                 course_context=context,
             )
             assert result["course_context"] == context
+
+    def test_fetch_course_context_merges_document_and_module_sources(self):
+        from app.agent import CanvasGitHubAgent
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_TOKEN': 'test_token',
+            'GITHUB_TOKEN': 'test_gh_token',
+            'GITHUB_USERNAME': 'testuser'
+        }):
+            agent = CanvasGitHubAgent()
+            assignment = {
+                "name": "Posterior Homework",
+                "description": "Implement Bayesian updating.",
+            }
+            document_context = [
+                {
+                    "document_name": "slides.pdf",
+                    "section_title": "Bayes Review",
+                    "text": "Posterior is proportional to prior times likelihood.",
+                },
+                {
+                    "document_name": "slides.pdf",
+                    "section_title": "Law of Total Probability",
+                    "text": "Marginalization over hypotheses.",
+                },
+            ]
+            module_context = [
+                {
+                    "document_name": "Canvas Module: Week 4",
+                    "section_title": "Bayes theorem page",
+                    "text": "Module walkthrough of posterior updates.",
+                    "item_type": "Page",
+                }
+            ]
+
+            agent.course_context_tools.search_context = Mock(return_value=document_context)
+            agent.canvas_tools.search_course_module_context = AsyncMock(return_value=module_context)
+
+            result = asyncio.run(agent.fetch_course_context(123, assignment, limit=3))
+
+            assert result == [
+                document_context[0],
+                module_context[0],
+                document_context[1],
+            ]
 
     def test_run_routes_writing_to_notion(self):
         """Run routes writing assignments to Notion page creation path."""

@@ -19,6 +19,23 @@ class StubCanvasTools:
     async def get_course_assignments(self, course_id):
         return [{"id": 42, "name": f"Assignment for {course_id}"}]
 
+    async def get_course_modules(self, course_id):
+        return [{"id": 7, "name": f"Module for {course_id}", "items": [{"id": 11, "title": "Bayes Review"}]}]
+
+    async def search_course_module_context(self, course_id, query, limit):
+        return [
+            {
+                "id": "module:123:7:11",
+                "course_id": course_id,
+                "document_name": "Canvas Module: Module for 123",
+                "module_name": f"Module for {course_id}",
+                "section_title": "Bayes Review",
+                "item_type": "Page",
+                "distance": 0.5,
+                "text": "Module: Bayes Review\n\nPosterior update explanation.",
+            }
+        ][:limit]
+
 
 class StubAgentSuccess:
     async def run(self, **kwargs):
@@ -63,6 +80,12 @@ class StubCanvasToolsError:
 
     async def get_course_assignments(self, course_id):
         raise RuntimeError("sensitive assignment query failure")
+
+    async def get_course_modules(self, course_id):
+        raise RuntimeError("sensitive module listing failure")
+
+    async def search_course_module_context(self, course_id, query, limit):
+        raise RuntimeError("sensitive module search failure")
 
 
 class StubAgentError:
@@ -338,6 +361,30 @@ def test_get_assignments_success(monkeypatch):
     }
 
 
+def test_get_modules_success(monkeypatch):
+    monkeypatch.setattr(api, "CanvasTools", StubCanvasTools)
+    response = asyncio.run(_request("GET", "/courses/123/modules"))
+
+    assert response.status_code == 200
+    assert response.json()["modules"][0]["name"] == "Module for 123"
+
+
+def test_search_course_modules_success(monkeypatch):
+    monkeypatch.setattr(api, "CanvasTools", StubCanvasTools)
+    response = asyncio.run(
+        _request(
+            "POST",
+            "/courses/123/modules/search",
+            {"query": "posterior update", "limit": 1},
+        )
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["course_id"] == 123
+    assert payload["results"][0]["section_title"] == "Bayes Review"
+
+
 def test_create_success(monkeypatch):
     monkeypatch.setattr(api, "CanvasGitHubAgent", StubAgentSuccess)
     response = asyncio.run(
@@ -410,6 +457,28 @@ def test_get_assignments_sanitizes_internal_errors(monkeypatch):
 
     assert response.status_code == 500
     assert response.json()["detail"] == "Failed to fetch assignments."
+
+
+def test_get_modules_sanitizes_internal_errors(monkeypatch):
+    monkeypatch.setattr(api, "CanvasTools", StubCanvasToolsError)
+    response = asyncio.run(_request("GET", "/courses/123/modules"))
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Failed to fetch modules."
+
+
+def test_search_course_modules_sanitizes_internal_errors(monkeypatch):
+    monkeypatch.setattr(api, "CanvasTools", StubCanvasToolsError)
+    response = asyncio.run(
+        _request(
+            "POST",
+            "/courses/123/modules/search",
+            {"query": "posterior update", "limit": 1},
+        )
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Failed to search course modules."
 
 
 def test_create_sanitizes_internal_errors(monkeypatch):
