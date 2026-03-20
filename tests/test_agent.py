@@ -143,6 +143,7 @@ class TestTemplates:
         assert checked_in == expected
         assert checked_in["name"] == "Canvas Assignment Workflow"
         assert checked_in["metadata"]["architecture"] == "deterministic workflow orchestrator"
+        assert checked_in["interoperability"]["mcp"] == "canvas-github-agent-mcp"
 
     def test_build_service_oasf_record_matches_checked_in_json(self):
         """The checked-in OASF record should match the generated payload."""
@@ -163,6 +164,7 @@ class TestTemplates:
         assert checked_in["skills"][0]["id"] == 1001
         assert checked_in["locators"][0]["type"] == "source_code"
         assert checked_in["locators"][1]["type"] == "url"
+        assert checked_in["annotations"]["mcp_stdio_command"] == "canvas-github-agent-mcp"
         assert checked_in["annotations"]["task_submission_endpoint"] == "http://localhost:8000/tasks"
         assert checked_in["annotations"]["task_status_schema"] == "task_status_v1"
         assert checked_in["annotations"]["health_endpoint"] == "http://localhost:8000/health"

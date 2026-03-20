@@ -325,6 +325,7 @@ def build_agent_fact_card(
     capabilities: List[str],
     registry_url: str = "",
     source_repository: str = "",
+    mcp_locator: str = "#registry:server-name",
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
@@ -343,7 +344,7 @@ def build_agent_fact_card(
         "capabilities": clean_capabilities,
         "interoperability": {
             "a2a": "@agent-id",
-            "mcp": "#registry:server-name",
+            "mcp": mcp_locator,
         },
         "registry": {
             "url": registry_url,
@@ -376,10 +377,13 @@ def build_service_fact_card() -> Dict[str, Any]:
         ],
         registry_url="https://index.projectnanda.org",
         source_repository="https://github.com/willdaly/canvas-github-agent",
+        mcp_locator="canvas-github-agent-mcp",
         metadata={
             "version": "0.1.0",
             "runtime": "python>=3.10",
             "entrypoint": "app/agent.py",
+            "mcp_entrypoint": "app/mcp_server.py",
+            "mcp_stdio_command": "canvas-github-agent-mcp",
             "architecture": "deterministic workflow orchestrator",
             "inputs": [
                 "course_id",
@@ -472,6 +476,11 @@ def build_service_oasf_record(service_base_url: Optional[str] = None) -> Dict[st
             "entrypoint": "app/agent.py",
             "health_endpoint": f"{resolved_service_base_url}/health",
             "invocation_mode": "supports synchronous request-response and asynchronous task polling",
+            "mcp_entrypoint": "app/mcp_server.py",
+            "mcp_server_name": "canvas-assignment-workflow",
+            "mcp_stdio_command": "canvas-github-agent-mcp",
+            "mcp_capabilities_resource": "canvas-assignment-workflow://capabilities",
+            "mcp_oasf_resource": "canvas-assignment-workflow://metadata/oasf-record",
             "notebook_support": (
                 "python notebook scaffolding when assignment text explicitly "
                 "requires Jupyter notebook submission"

@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "canvas-assignment-workflow": {
+      "command": "/absolute/path/to/canvas-github-agent/.venv/bin/python",
+      "args": [
+        "-m",
+        "app.mcp_server"
+      ],
+      "cwd": "/absolute/path/to/canvas-github-agent",
+      "env": {
+        "CANVAS_API_URL": "https://your-school.instructure.com",
+        "CANVAS_API_TOKEN": "your_canvas_token",
+        "CANVAS_USE_MCP": "false",
+        "GITHUB_TOKEN": "your_github_token",
+        "GITHUB_USERNAME": "your_github_username",
+        "GITHUB_ORG": "",
+        "NOTION_TOKEN": "your_notion_token",
+        "NOTION_PARENT_PAGE_ID": "your_notion_parent_page_id",
+        "SERVICE_BASE_URL": "http://localhost:8000"
+      }
+    }
+  }
+}

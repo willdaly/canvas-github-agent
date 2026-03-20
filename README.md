@@ -20,6 +20,7 @@ The runtime architecture is orchestration-first, not a multi-agent task pipeline
 - app/agent.py: workflow orchestrator and CLI command entrypoint
 - app/cli.py: interactive CLI
 - api.py: FastAPI surface for frontend and integrations
+- app/mcp_server.py: FastMCP stdio server for agent-tool interoperability
 - tools/canvas_tools.py: Canvas integration wrapper (MCP first with direct REST fallback)
 - tools/github_tools.py: GitHub integration wrapper
 - tools/notion_tools.py: Notion integration wrapper
@@ -94,6 +95,43 @@ canvas-github-agent create-repo --course-id 12345 --confirm-type
 The `/create` endpoint returns a stable `task_result_v1` payload with service, request, route, assignment, artifacts, and details fields.
 
 The `/tasks` endpoints expose an asynchronous `task_status_v1` lifecycle with `queued`, `running`, `completed`, and `failed` states.
+
+## MCP Server
+
+The project also exposes an MCP stdio server so other agents and MCP-compatible clients can invoke the workflow directly.
+
+Run it with:
+
+```bash
+canvas-github-agent-mcp
+```
+
+Primary MCP tools:
+
+- `list_courses`
+- `list_assignments`
+- `get_capabilities`
+- `get_oasf_record`
+- `create_destination`
+- `submit_task`
+- `get_task_status`
+
+Static MCP resources:
+
+- `canvas-assignment-workflow://capabilities`
+- `canvas-assignment-workflow://metadata/oasf-record`
+
+Local smoke test:
+
+```bash
+.venv/bin/python -m pytest tests/test_mcp_server.py -q
+```
+
+Claude Desktop config template:
+
+- `examples/claude_desktop_config.template.json`
+
+Claude Desktop expects absolute paths. Update the template paths and env values, then add the entry under `~/Library/Application Support/Claude/claude_desktop_config.json` and fully restart Claude Desktop.
 
 ## Frontend
 

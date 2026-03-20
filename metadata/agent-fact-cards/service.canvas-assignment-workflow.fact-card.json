@@ -15,7 +15,7 @@
   ],
   "interoperability": {
     "a2a": "@agent-id",
-    "mcp": "#registry:server-name"
+    "mcp": "canvas-github-agent-mcp"
   },
   "registry": {
     "url": "https://index.projectnanda.org",
@@ -26,6 +26,8 @@
     "version": "0.1.0",
     "runtime": "python>=3.10",
     "entrypoint": "app/agent.py",
+    "mcp_entrypoint": "app/mcp_server.py",
+    "mcp_stdio_command": "canvas-github-agent-mcp",
     "architecture": "deterministic workflow orchestrator",
     "inputs": [
       "course_id",
