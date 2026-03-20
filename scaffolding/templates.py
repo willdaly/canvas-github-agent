@@ -930,6 +930,442 @@ def _extend_python_requirements(existing_requirements: str, extra_requirements: 
     return "\n".join(lines) + "\n"
 
 
+def _is_python_ml_project_assignment(requested_files: List[str], assignment_description: str) -> bool:
+    requested_lower = {path.lower() for path in requested_files}
+    description_lower = assignment_description.lower()
+    ml_signals = [
+        "machine learning",
+        "ml project",
+        "group project",
+        "dataset",
+        "eda",
+        "exploratory data analysis",
+        "model development",
+        "predictive",
+        "prescriptive",
+        "classification",
+        "malware",
+        "intrusion",
+        "nsl-kdd",
+        "kagglehub",
+    ]
+    return (
+        any(signal in description_lower for signal in ml_signals)
+        or "presentation.md" in requested_lower
+        or "slides.md" in requested_lower
+    )
+
+
+def _is_nsl_kdd_assignment(assignment_description: str) -> bool:
+    description_lower = assignment_description.lower()
+    return any(
+        phrase in description_lower
+        for phrase in [
+            "nsl-kdd",
+            "nsl kdd",
+            "network intrusion detection",
+            "malware and network intrusion detection",
+        ]
+    )
+
+
+def _build_generic_report_template(assignment_name: str) -> str:
+    return (
+        f"# {assignment_name} Report\n\n"
+        "## Executive Summary\n\n"
+        "Summarize the purpose of the work, the approach you followed, and the most important findings.\n\n"
+        "## Problem Statement\n\n"
+        "Explain the problem being addressed and why it matters.\n\n"
+        "## Methods\n\n"
+        "Document the workflow, tools, and analysis steps used to complete the assignment.\n\n"
+        "## Findings\n\n"
+        "Summarize the main results, tables, graphs, or outputs that support your conclusions.\n\n"
+        "## Recommendations\n\n"
+        "Describe the actions or follow-up steps suggested by the results.\n\n"
+        "## Appendix\n\n"
+        "Include referenced code snippets, tables, figures, or supporting material.\n"
+    )
+
+
+def _build_ml_project_report_template(assignment_name: str, dataset_name: str) -> str:
+    return (
+        f"# {assignment_name} Report\n\n"
+        "## Real-World Problem\n\n"
+        "Explain the cybersecurity or business problem your team is solving and why big-data ML techniques are appropriate.\n\n"
+        f"## Dataset Selection: {dataset_name}\n\n"
+        "Explain why this dataset was selected, what it contains, and how it supports the project objectives.\n\n"
+        "## EDA Workflow\n\n"
+        "Describe the exploratory data analysis process, dataset size, feature types, missingness, duplicates, outliers, and the most important patterns discovered.\n\n"
+        "## Data Preparation\n\n"
+        "Summarize the preprocessing, feature engineering, encoding, scaling, and dataset split decisions used before model training.\n\n"
+        "## ML Methodology and Algorithms\n\n"
+        "Explain which ML algorithms were used, why they were selected, and how the code transforms the data step by step.\n\n"
+        "## Results and Metrics\n\n"
+        "Compare model performance using the selected metrics and visualizations. Include insights from the EDA and advanced analytics.\n\n"
+        "## Interpretation and Recommendations\n\n"
+        "Interpret what the results mean for stakeholders, identify the important variables, and recommend next actions.\n\n"
+        "## Weekly Code Walkthrough Notes\n\n"
+        "Capture concise talking points for the weekly in-class walkthroughs and note which code snippets to demonstrate.\n\n"
+        "## Appendix\n\n"
+        "Include referenced code snippets, tables, plots, and any generated model artifact summaries.\n"
+    )
+
+
+def _build_ml_project_runner_file(dataset_name: str) -> str:
+    return (
+        f'"""Pipeline entrypoint for the {dataset_name} ML project scaffold."""\n\n'
+        "from pathlib import Path\n\n"
+        "from src.data_loader import load_nsl_kdd_frames\n"
+        "from src.eda import build_eda_summary, render_eda_artifacts\n"
+        "from src.train_models import train_and_evaluate_models, write_model_artifacts\n\n"
+        "def main() -> None:\n"
+        '    """Download data, run EDA, train baseline models, and persist artifacts."""\n'
+        "    output_dir = Path('outputs')\n"
+        "    output_dir.mkdir(exist_ok=True)\n"
+        "    train_df, test_df, metadata = load_nsl_kdd_frames()\n"
+        "    eda_summary = build_eda_summary(train_df, test_df, metadata)\n"
+        "    render_eda_artifacts(train_df, eda_summary, output_dir=output_dir)\n"
+        "    model_results = train_and_evaluate_models(train_df, test_df)\n"
+        "    write_model_artifacts(model_results, output_dir=output_dir)\n"
+        "    print('EDA and model artifacts written to outputs/.')\n\n"
+        'if __name__ == "__main__":\n'
+        "    main()\n"
+    )
+
+
+def _build_nsl_kdd_data_loader_file() -> str:
+    return '''"""Dataset-loading utilities for the NSL-KDD ML project scaffold."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Sequence
+
+import kagglehub
+import pandas as pd
+
+DEFAULT_DATASET_HANDLE = os.getenv(
+    "KAGGLEHUB_DATASET",
+    "<set-your-nsl-kdd-kagglehub-handle>",
+)
+
+NSL_KDD_COLUMNS = [
+    "duration",
+    "protocol_type",
+    "service",
+    "flag",
+    "src_bytes",
+    "dst_bytes",
+    "land",
+    "wrong_fragment",
+    "urgent",
+    "hot",
+    "num_failed_logins",
+    "logged_in",
+    "num_compromised",
+    "root_shell",
+    "su_attempted",
+    "num_root",
+    "num_file_creations",
+    "num_shells",
+    "num_access_files",
+    "num_outbound_cmds",
+    "is_host_login",
+    "is_guest_login",
+    "count",
+    "srv_count",
+    "serror_rate",
+    "srv_serror_rate",
+    "rerror_rate",
+    "srv_rerror_rate",
+    "same_srv_rate",
+    "diff_srv_rate",
+    "srv_diff_host_rate",
+    "dst_host_count",
+    "dst_host_srv_count",
+    "dst_host_same_srv_rate",
+    "dst_host_diff_srv_rate",
+    "dst_host_same_src_port_rate",
+    "dst_host_srv_diff_host_rate",
+    "dst_host_serror_rate",
+    "dst_host_srv_serror_rate",
+    "dst_host_rerror_rate",
+    "dst_host_srv_rerror_rate",
+    "label",
+    "difficulty",
+]
+
+
+def _find_matching_file(root: Path, candidates: Sequence[str]) -> Path:
+    lowered = {candidate.lower() for candidate in candidates}
+    for path in root.rglob("*"):
+        if path.is_file() and path.name.lower() in lowered:
+            return path
+    raise FileNotFoundError(f"Could not find any of {sorted(lowered)} under {root}")
+
+
+def download_dataset(dataset_handle: str | None = None) -> Path:
+    handle = (dataset_handle or DEFAULT_DATASET_HANDLE).strip()
+    if not handle or handle.startswith("<"):
+        raise ValueError(
+            "Set KAGGLEHUB_DATASET to the KaggleHub handle for your NSL-KDD dataset before running this scaffold."
+        )
+    return Path(kagglehub.dataset_download(handle))
+
+
+def load_nsl_kdd_frames(dataset_handle: str | None = None) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, str]]:
+    dataset_root = download_dataset(dataset_handle)
+    train_path = _find_matching_file(dataset_root, ["KDDTrain+.txt", "KDDTrain+.csv"])
+    test_path = _find_matching_file(dataset_root, ["KDDTest+.txt", "KDDTest+.csv"])
+
+    train_df = pd.read_csv(train_path, names=NSL_KDD_COLUMNS)
+    test_df = pd.read_csv(test_path, names=NSL_KDD_COLUMNS)
+    metadata = {
+        "dataset_root": str(dataset_root),
+        "train_path": str(train_path),
+        "test_path": str(test_path),
+    }
+    return train_df, test_df, metadata
+'''
+
+
+def _build_ml_eda_file(dataset_name: str) -> str:
+    return f'''"""EDA helpers for the {dataset_name} ML project scaffold."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+
+
+def build_eda_summary(train_df: pd.DataFrame, test_df: pd.DataFrame, metadata: dict[str, str]) -> dict:
+    combined_df = pd.concat([train_df.assign(split="train"), test_df.assign(split="test")], ignore_index=True)
+    numeric_columns = combined_df.select_dtypes(include=["number"]).columns.tolist()
+    return {{
+        "dataset_root": metadata.get("dataset_root", ""),
+        "train_rows": int(len(train_df)),
+        "test_rows": int(len(test_df)),
+        "combined_rows": int(len(combined_df)),
+        "feature_count": int(combined_df.shape[1] - 2),
+        "missing_values": int(combined_df.isna().sum().sum()),
+        "duplicate_rows": int(combined_df.duplicated().sum()),
+        "label_distribution": combined_df["label"].value_counts().to_dict(),
+        "numeric_columns": numeric_columns,
+    }}
+
+
+def render_eda_artifacts(train_df: pd.DataFrame, summary: dict, output_dir: str | Path = "outputs") -> None:
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    (output_path / "eda_summary.json").write_text(json.dumps(summary, indent=2) + "\\n", encoding="utf-8")
+
+    plt.figure(figsize=(10, 5))
+    train_df["label"].value_counts().head(10).plot(kind="bar")
+    plt.title("Top NSL-KDD Class Labels")
+    plt.tight_layout()
+    plt.savefig(output_path / "label_distribution.png")
+    plt.close()
+
+    numeric_columns = train_df.select_dtypes(include=["number"]).columns.tolist()[:6]
+    if numeric_columns:
+        plt.figure(figsize=(10, 6))
+        sns.boxplot(data=train_df[numeric_columns])
+        plt.xticks(rotation=30, ha="right")
+        plt.title("Sample Numeric Feature Distribution")
+        plt.tight_layout()
+        plt.savefig(output_path / "numeric_feature_boxplot.png")
+        plt.close()
+'''
+
+
+def _build_ml_training_file() -> str:
+    return '''"""Baseline model-training helpers for the NSL-KDD ML project scaffold."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, confusion_matrix, precision_recall_fscore_support
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+TARGET_COLUMN = "label"
+CATEGORICAL_COLUMNS = ["protocol_type", "service", "flag"]
+
+
+def _binary_target(series: pd.Series) -> pd.Series:
+    return (series.astype(str).str.lower() != "normal").astype(int)
+
+
+def _split_features(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
+    features = frame.drop(columns=[TARGET_COLUMN, "difficulty"], errors="ignore")
+    target = _binary_target(frame[TARGET_COLUMN])
+    return features, target
+
+
+def build_preprocessor(features: pd.DataFrame) -> ColumnTransformer:
+    categorical_columns = [column for column in CATEGORICAL_COLUMNS if column in features.columns]
+    numeric_columns = [column for column in features.columns if column not in categorical_columns]
+
+    return ColumnTransformer(
+        transformers=[
+            (
+                "categorical",
+                Pipeline(
+                    steps=[
+                        ("imputer", SimpleImputer(strategy="most_frequent")),
+                        ("encoder", OneHotEncoder(handle_unknown="ignore")),
+                    ]
+                ),
+                categorical_columns,
+            ),
+            (
+                "numeric",
+                Pipeline(
+                    steps=[
+                        ("imputer", SimpleImputer(strategy="median")),
+                        ("scaler", StandardScaler()),
+                    ]
+                ),
+                numeric_columns,
+            ),
+        ],
+        remainder="drop",
+    )
+
+
+def build_models(preprocessor: ColumnTransformer) -> dict[str, Pipeline]:
+    return {
+        "logistic_regression": Pipeline(
+            steps=[
+                ("preprocessor", preprocessor),
+                ("model", LogisticRegression(max_iter=1000)),
+            ]
+        ),
+        "random_forest": Pipeline(
+            steps=[
+                ("preprocessor", preprocessor),
+                ("model", RandomForestClassifier(n_estimators=300, random_state=42, n_jobs=-1)),
+            ]
+        ),
+    }
+
+
+def _evaluate_model(name: str, model: Pipeline, x_train: pd.DataFrame, y_train: pd.Series, x_test: pd.DataFrame, y_test: pd.Series) -> dict:
+    model.fit(x_train, y_train)
+    predictions = model.predict(x_test)
+    precision, recall, f1, _ = precision_recall_fscore_support(y_test, predictions, average="binary", zero_division=0)
+    return {
+        "model": name,
+        "accuracy": round(float(accuracy_score(y_test, predictions)), 4),
+        "precision": round(float(precision), 4),
+        "recall": round(float(recall), 4),
+        "f1": round(float(f1), 4),
+        "confusion_matrix": confusion_matrix(y_test, predictions).tolist(),
+    }
+
+
+def train_and_evaluate_models(train_df: pd.DataFrame, test_df: pd.DataFrame) -> list[dict]:
+    x_train, y_train = _split_features(train_df)
+    x_test, y_test = _split_features(test_df)
+    preprocessor = build_preprocessor(x_train)
+    models = build_models(preprocessor)
+    return [
+        _evaluate_model(name, model, x_train, y_train, x_test, y_test)
+        for name, model in models.items()
+    ]
+
+
+def write_model_artifacts(results: list[dict], output_dir: str | Path = "outputs") -> None:
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    (output_path / "model_metrics.json").write_text(json.dumps(results, indent=2) + "\\n", encoding="utf-8")
+
+    lines = [
+        "# Model Metrics",
+        "",
+        "| Model | Accuracy | Precision | Recall | F1 |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for result in results:
+        lines.append(
+            f"| {result['model']} | {result['accuracy']:.4f} | {result['precision']:.4f} | {result['recall']:.4f} | {result['f1']:.4f} |"
+        )
+
+    (output_path / "MODEL_METRICS.md").write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+'''
+
+
+def _build_ml_project_tests_file() -> str:
+    return '''import pandas as pd
+
+from src.train_models import _binary_target, build_preprocessor
+
+
+def test_binary_target_marks_attacks_as_one():
+    result = _binary_target(pd.Series(["normal", "neptune", "smurf"]))
+    assert result.tolist() == [0, 1, 1]
+
+
+def test_build_preprocessor_handles_known_nsl_kdd_columns():
+    frame = pd.DataFrame(
+        {
+            "protocol_type": ["tcp", "udp"],
+            "service": ["http", "domain_u"],
+            "flag": ["SF", "S0"],
+            "src_bytes": [181, 239],
+            "dst_bytes": [5450, 486],
+        }
+    )
+    preprocessor = build_preprocessor(frame)
+    assert preprocessor is not None
+'''
+
+
+def _build_ml_presentation_outline(assignment_name: str, dataset_name: str) -> str:
+    return (
+        f"# {assignment_name} Presentation Outline\n\n"
+        "## Slide 1: Business Problem\n"
+        "- Explain the malware or intrusion-detection problem and why it matters.\n\n"
+        f"## Slide 2: Dataset Selection ({dataset_name})\n"
+        "- Describe the dataset, why it was chosen, and any limitations.\n\n"
+        "## Slide 3: EDA Highlights\n"
+        "- Show dataset size, data quality findings, and the most important graphs.\n\n"
+        "## Slide 4: Feature Engineering and Preprocessing\n"
+        "- Explain categorical encoding, scaling, and target construction.\n\n"
+        "## Slide 5: Models and Metrics\n"
+        "- Compare the baseline models and justify the evaluation metrics.\n\n"
+        "## Slide 6: Results and Recommendations\n"
+        "- Interpret the results and recommend next steps for the stakeholder.\n\n"
+        "## Slide 7: Weekly Code Walkthrough Snippets\n"
+        "- List the code snippets each group member should be ready to explain in class.\n"
+    )
+
+
+def _append_ml_readme_notes(existing_readme: str, dataset_name: str) -> str:
+    return existing_readme.rstrip() + (
+        "\n\n## ML Project Scaffold\n"
+        f"- This scaffold is tailored for the {dataset_name} workflow with EDA, baseline model training, report writing, and presentation prep.\n"
+        "- Set `KAGGLEHUB_DATASET` to the KaggleHub handle for your approved dataset before running the project.\n"
+        "- Run `python main.py` to execute the end-to-end starter workflow and populate `outputs/`.\n"
+        "- Review `PRESENTATION.md` for the slide-deck outline and `Report.md` for the written summary structure.\n"
+        "- Use `pytest tests/test_ml_project.py` to validate the generated ML helper modules.\n"
+    )
+
+
 def _is_python_maze_assignment(requested_files: List[str], assignment_description: str) -> bool:
     requested_lower = {path.lower() for path in requested_files}
     description_lower = assignment_description.lower()
@@ -1368,6 +1804,12 @@ def build_assignment_specific_files(
         requested_files,
         assignment_description,
     )
+    is_ml_project_assignment = (
+        language_lower in {"python", "py"}
+        and not is_maze_assignment
+        and _is_python_ml_project_assignment(requested_files, assignment_description)
+    )
+    dataset_name = "NSL-KDD" if _is_nsl_kdd_assignment(assignment_description) else "selected dataset"
 
     if is_maze_assignment:
         maze_functions = [
@@ -1395,8 +1837,21 @@ def build_assignment_specific_files(
             "X   E\n"
         )
 
-    if is_maze_assignment or "report.md" in requested_lower or "report" in assignment_description.lower():
+    if is_maze_assignment:
         files["Report.md"] = _build_maze_report_template(assignment_name)
+    elif is_ml_project_assignment:
+        files["Report.md"] = _build_ml_project_report_template(assignment_name, dataset_name)
+    elif "report.md" in requested_lower or "report" in assignment_description.lower():
+        files["Report.md"] = _build_generic_report_template(assignment_name)
+
+    if is_ml_project_assignment:
+        files["main.py"] = _build_ml_project_runner_file(dataset_name)
+        files["src/__init__.py"] = '"""Generated ML project helpers."""\n'
+        files["src/data_loader.py"] = _build_nsl_kdd_data_loader_file()
+        files["src/eda.py"] = _build_ml_eda_file(dataset_name)
+        files["src/train_models.py"] = _build_ml_training_file()
+        files["tests/test_ml_project.py"] = _build_ml_project_tests_file()
+        files["PRESENTATION.md"] = _build_ml_presentation_outline(assignment_name, dataset_name)
 
     if language_lower in {"python", "py"} and assignment_mentions_jupyter_notebook(assignment_description):
         notebook_imports = inferred_python_imports
@@ -1520,6 +1975,20 @@ def generate_starter_files(
 
         if maze_artifacts:
             files["artifacts/README.md"] = _build_artifact_readme(maze_artifacts)
+
+    if language.lower() in {"python", "py"} and "src/train_models.py" in files:
+        dataset_name = "NSL-KDD" if _is_nsl_kdd_assignment(assignment_description) else "selected dataset"
+        files["README.md"] = _append_ml_readme_notes(files["README.md"], dataset_name)
+        files["requirements.txt"] = _extend_python_requirements(
+            files.get("requirements.txt", PYTHON_TEMPLATES["requirements.txt"]),
+            [
+                "kagglehub>=0.3.0",
+                "pandas>=2.2.0",
+                "matplotlib>=3.8.0",
+                "seaborn>=0.13.0",
+                "scikit-learn>=1.4.0",
+            ],
+        )
 
     if language.lower() in {"python", "py"}:
         inferred_imports = infer_python_assignment_imports(assignment_description)
