@@ -1,0 +1,24 @@
+{
+  "profile_id": "smithery-execution-pilot",
+  "schema_version": "1.0",
+  "capability_family": "execution",
+  "connection": {
+    "id": "assignment-execution-pilot",
+    "url": "https://example.run.tools"
+  },
+  "tool_resolution": {
+    "requested_tool_name": "runner.execute",
+    "intent_queries": [
+      "execute assignment",
+      "run tests",
+      "run benchmark"
+    ]
+  },
+  "delegation_env": {
+    "DELEGATION_ALLOWED_CONNECTION_IDS": "assignment-execution-pilot",
+    "DELEGATION_MIN_TRUST_LEVEL": "verified_profile",
+    "DELEGATION_ENFORCE_SCORECARD_THRESHOLDS": "true",
+    "DELEGATION_MIN_SCORECARD_SUCCESS_RATE": "0.6",
+    "DELEGATION_MIN_SCORECARD_TOTAL_COUNT": "3"
+  }
+}

@@ -13,6 +13,12 @@
     "search_course_modules",
     "ingest_course_document",
     "search_course_context",
+    "discover_agents",
+    "plan_assignment",
+    "resume_task",
+    "list_agent_scorecards",
+    "list_task_steps",
+    "list_task_artifacts",
     "create_github_repository",
     "generate_starter_files",
     "create_notion_page"
@@ -41,6 +47,10 @@
       "notion_content_mode (optional)"
     ],
     "outputs": [
+      "agent discovery payloads for delegation candidate selection",
+      "assignment planning payloads for pre-execution analysis",
+      "agent scorecard payloads for delegation ranking feedback",
+      "execution step payloads for persisted task tracing",
       "github repository metadata and URL for coding assignments",
       "notion page metadata and URL for writing assignments"
     ],

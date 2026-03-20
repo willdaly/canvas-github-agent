@@ -21,6 +21,33 @@ server = FastMCP(
 )
 
 
+def _pilot_execution_profile() -> dict[str, Any]:
+    return {
+        "profile_id": "smithery-execution-pilot",
+        "schema_version": "1.0",
+        "capability_family": "execution",
+        "connection": {
+            "id": "assignment-execution-pilot",
+            "url": "https://example.run.tools",
+        },
+        "tool_resolution": {
+            "requested_tool_name": "runner.execute",
+            "intent_queries": [
+                "execute assignment",
+                "run tests",
+                "run benchmark",
+            ],
+        },
+        "delegation_env": {
+            "DELEGATION_ALLOWED_CONNECTION_IDS": "assignment-execution-pilot",
+            "DELEGATION_MIN_TRUST_LEVEL": "verified_profile",
+            "DELEGATION_ENFORCE_SCORECARD_THRESHOLDS": "true",
+            "DELEGATION_MIN_SCORECARD_SUCCESS_RATE": "0.6",
+            "DELEGATION_MIN_SCORECARD_TOTAL_COUNT": "3",
+        },
+    }
+
+
 def _create_request(
     *,
     course_id: int,
@@ -28,6 +55,18 @@ def _create_request(
     language: str = "python",
     assignment_type: Optional[str] = None,
     notion_content_mode: Optional[str] = None,
+    enable_delegated_evaluation: bool = False,
+    evaluation_agent_id: Optional[str] = None,
+    evaluation_connection_id: Optional[str] = None,
+    evaluation_connection_url: Optional[str] = None,
+    evaluation_tool_name: str = "evaluate",
+    evaluation_include_live_results: bool = False,
+    enable_delegated_execution: bool = False,
+    execution_agent_id: Optional[str] = None,
+    execution_connection_id: Optional[str] = None,
+    execution_connection_url: Optional[str] = None,
+    execution_tool_name: str = "execute",
+    execution_include_live_results: bool = False,
 ) -> api.CreateRequest:
     """Build a validated request payload shared with the HTTP surface."""
     return api.CreateRequest(
@@ -36,6 +75,18 @@ def _create_request(
         language=language,
         assignment_type=assignment_type,
         notion_content_mode=notion_content_mode,
+        enable_delegated_evaluation=enable_delegated_evaluation,
+        evaluation_agent_id=evaluation_agent_id,
+        evaluation_connection_id=evaluation_connection_id,
+        evaluation_connection_url=evaluation_connection_url,
+        evaluation_tool_name=evaluation_tool_name,
+        evaluation_include_live_results=evaluation_include_live_results,
+        enable_delegated_execution=enable_delegated_execution,
+        execution_agent_id=execution_agent_id,
+        execution_connection_id=execution_connection_id,
+        execution_connection_url=execution_connection_url,
+        execution_tool_name=execution_tool_name,
+        execution_include_live_results=execution_include_live_results,
     )
 
 
@@ -136,6 +187,52 @@ async def search_course_context(course_id: int, query: str, limit: int = 5) -> d
         _raise_tool_error(exc)
 
 
+@server.tool(description="Return ranked external agent candidates for a requested capability family or search query.")
+async def discover_agents(
+    capability_family: Optional[str] = None,
+    query: Optional[str] = None,
+    limit: int = 5,
+    include_live_results: bool = False,
+    verified_only: bool = False,
+) -> dict[str, Any]:
+    """Discover candidate external agents for delegation."""
+    try:
+        return await api.discover_agents(
+            api.DiscoverAgentsRequest(
+                capability_family=capability_family,
+                query=query,
+                limit=limit,
+                include_live_results=include_live_results,
+                verified_only=verified_only,
+            )
+        )
+    except HTTPException as exc:
+        _raise_tool_error(exc)
+
+
+@server.tool(description="Analyze an assignment and return a structured execution plan without publishing artifacts.")
+async def plan_assignment(
+    course_id: int,
+    assignment_id: Optional[int] = None,
+    language: str = "python",
+    assignment_type: Optional[str] = None,
+    notion_content_mode: Optional[str] = None,
+) -> dict[str, Any]:
+    """Return the pre-execution assignment plan."""
+    try:
+        return await api.plan_assignment(
+            _create_request(
+                course_id=course_id,
+                assignment_id=assignment_id,
+                language=language,
+                assignment_type=assignment_type,
+                notion_content_mode=notion_content_mode,
+            )
+        )
+    except HTTPException as exc:
+        _raise_tool_error(exc)
+
+
 @server.tool(
     description=(
         "Synchronously create a GitHub repository for a coding assignment or a "
@@ -148,6 +245,18 @@ async def create_destination(
     language: str = "python",
     assignment_type: Optional[str] = None,
     notion_content_mode: Optional[str] = None,
+    enable_delegated_evaluation: bool = False,
+    evaluation_agent_id: Optional[str] = None,
+    evaluation_connection_id: Optional[str] = None,
+    evaluation_connection_url: Optional[str] = None,
+    evaluation_tool_name: str = "evaluate",
+    evaluation_include_live_results: bool = False,
+    enable_delegated_execution: bool = False,
+    execution_agent_id: Optional[str] = None,
+    execution_connection_id: Optional[str] = None,
+    execution_connection_url: Optional[str] = None,
+    execution_tool_name: str = "execute",
+    execution_include_live_results: bool = False,
 ) -> dict[str, Any]:
     """Run the existing synchronous provisioning workflow."""
     try:
@@ -158,6 +267,18 @@ async def create_destination(
                 language=language,
                 assignment_type=assignment_type,
                 notion_content_mode=notion_content_mode,
+                enable_delegated_evaluation=enable_delegated_evaluation,
+                evaluation_agent_id=evaluation_agent_id,
+                evaluation_connection_id=evaluation_connection_id,
+                evaluation_connection_url=evaluation_connection_url,
+                evaluation_tool_name=evaluation_tool_name,
+                evaluation_include_live_results=evaluation_include_live_results,
+                enable_delegated_execution=enable_delegated_execution,
+                execution_agent_id=execution_agent_id,
+                execution_connection_id=execution_connection_id,
+                execution_connection_url=execution_connection_url,
+                execution_tool_name=execution_tool_name,
+                execution_include_live_results=execution_include_live_results,
             )
         )
     except HTTPException as exc:
@@ -171,6 +292,18 @@ async def submit_task(
     language: str = "python",
     assignment_type: Optional[str] = None,
     notion_content_mode: Optional[str] = None,
+    enable_delegated_evaluation: bool = False,
+    evaluation_agent_id: Optional[str] = None,
+    evaluation_connection_id: Optional[str] = None,
+    evaluation_connection_url: Optional[str] = None,
+    evaluation_tool_name: str = "evaluate",
+    evaluation_include_live_results: bool = False,
+    enable_delegated_execution: bool = False,
+    execution_agent_id: Optional[str] = None,
+    execution_connection_id: Optional[str] = None,
+    execution_connection_url: Optional[str] = None,
+    execution_tool_name: str = "execute",
+    execution_include_live_results: bool = False,
 ) -> dict[str, Any]:
     """Queue async workflow execution using the shared in-memory task store."""
     return await api.submit_task(
@@ -180,6 +313,18 @@ async def submit_task(
             language=language,
             assignment_type=assignment_type,
             notion_content_mode=notion_content_mode,
+            enable_delegated_evaluation=enable_delegated_evaluation,
+            evaluation_agent_id=evaluation_agent_id,
+            evaluation_connection_id=evaluation_connection_id,
+            evaluation_connection_url=evaluation_connection_url,
+            evaluation_tool_name=evaluation_tool_name,
+            evaluation_include_live_results=evaluation_include_live_results,
+            enable_delegated_execution=enable_delegated_execution,
+            execution_agent_id=execution_agent_id,
+            execution_connection_id=execution_connection_id,
+            execution_connection_url=execution_connection_url,
+            execution_tool_name=execution_tool_name,
+            execution_include_live_results=execution_include_live_results,
         )
     )
 
@@ -189,6 +334,64 @@ async def get_task_status(task_id: str) -> dict[str, Any]:
     """Return the status of a previously submitted async task."""
     try:
         return await api.get_task(task_id)
+    except HTTPException as exc:
+        _raise_tool_error(exc)
+
+
+@server.tool(description="Resume a failed or partially completed task, optionally retrying selected steps only.")
+async def resume_task(task_id: str, step_ids: Optional[list[str]] = None, force_full_rerun: bool = False) -> dict[str, Any]:
+    """Resume a task and optionally retry selected steps only."""
+    try:
+        return await api.resume_task(
+            task_id,
+            api.ResumeTaskRequest(step_ids=step_ids, force_full_rerun=force_full_rerun),
+        )
+    except HTTPException as exc:
+        _raise_tool_error(exc)
+
+
+@server.tool(description="Inspect which schema-compatible remote tool would be selected for a delegated execution or evaluation step on a task.")
+async def inspect_task_delegation_tool(task_id: str, capability_family: str) -> dict[str, Any]:
+    """Resolve the remote tool selection for a task without executing it."""
+    try:
+        return await api.inspect_task_delegation_tool(
+            task_id,
+            api.DelegationToolInspectionRequest(capability_family=capability_family),
+        )
+    except HTTPException as exc:
+        _raise_tool_error(exc)
+
+
+@server.tool(description="List persisted delegation scorecards for discovered or invoked agents.")
+async def list_agent_scorecards(capability_family: Optional[str] = None) -> dict[str, Any]:
+    """Return persisted agent scorecards."""
+    return await api.list_agent_scorecards(capability_family)
+
+
+@server.tool(description="List persisted execution_step_v1 records for a submitted task.")
+async def list_task_steps(
+    task_id: str,
+    status: Optional[str] = None,
+    retried_only: bool = False,
+    delegated_only: bool = False,
+) -> dict[str, Any]:
+    """Return task step records for a submitted async task."""
+    try:
+        return await api.get_task_steps(
+            task_id,
+            status=status,
+            retried_only=retried_only,
+            delegated_only=delegated_only,
+        )
+    except HTTPException as exc:
+        _raise_tool_error(exc)
+
+
+@server.tool(description="List generated artifacts and provenance for a submitted task.")
+async def list_task_artifacts(task_id: str) -> dict[str, Any]:
+    """Return task artifacts and provenance for a submitted async task."""
+    try:
+        return await api.get_task_artifacts(task_id)
     except HTTPException as exc:
         _raise_tool_error(exc)
 
@@ -216,6 +419,61 @@ async def oasf_record_resource() -> str:
         api.build_service_oasf_record(service_base_url=api.get_service_base_url()),
         indent=2,
     )
+
+
+@server.resource(
+    "canvas-assignment-workflow://schemas/execution-step-v1",
+    name="execution-step-schema",
+    description="Static JSON schema describing persisted execution_step_v1 task step records.",
+    mime_type="application/json",
+)
+async def execution_step_schema_resource() -> str:
+    """Expose the execution step schema as a machine-readable MCP resource."""
+    return json.dumps(api.build_execution_step_schema(), indent=2)
+
+
+@server.resource(
+    "canvas-assignment-workflow://schemas/agent-scorecard-v1",
+    name="agent-scorecard-schema",
+    description="Static JSON schema describing persisted agent_scorecard_v1 records.",
+    mime_type="application/json",
+)
+async def agent_scorecard_schema_resource() -> str:
+    """Expose the agent scorecard schema as a machine-readable MCP resource."""
+    return json.dumps(api.build_agent_scorecard_schema(), indent=2)
+
+
+@server.resource(
+    "canvas-assignment-workflow://schemas/resume-task-v1",
+    name="resume-task-schema",
+    description="Static JSON schema describing task resume request payloads.",
+    mime_type="application/json",
+)
+async def resume_task_schema_resource() -> str:
+    """Expose the resume task request schema as a machine-readable MCP resource."""
+    return json.dumps(api.build_resume_task_schema(), indent=2)
+
+
+@server.resource(
+    "canvas-assignment-workflow://schemas/delegation-tool-inspection-v1",
+    name="delegation-tool-inspection-schema",
+    description="Static JSON schema describing delegation tool inspection responses.",
+    mime_type="application/json",
+)
+async def delegation_tool_inspection_schema_resource() -> str:
+    """Expose the delegation tool inspection schema as a machine-readable MCP resource."""
+    return json.dumps(api.build_delegation_tool_inspection_schema(), indent=2)
+
+
+@server.resource(
+    "canvas-assignment-workflow://profiles/smithery-execution-pilot",
+    name="smithery-execution-pilot",
+    description="Static JSON profile describing the baseline Smithery execution pilot configuration.",
+    mime_type="application/json",
+)
+async def smithery_execution_pilot_resource() -> str:
+    """Expose the Smithery execution pilot profile as a machine-readable MCP resource."""
+    return json.dumps(_pilot_execution_profile(), indent=2)
 
 
 def run() -> None:
