@@ -10,7 +10,7 @@ export default function App() {
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [language, setLanguage] = useState("python");
-  const [assignmentType, setAssignmentType] = useState("auto");
+  const [routeMode, setRouteMode] = useState("auto");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
@@ -64,6 +64,13 @@ export default function App() {
   async function handleCreate() {
     if (!selectedCourse) return;
     setLoading("create"); setError(""); setResult(null);
+    const assignmentType =
+      routeMode === "auto"
+        ? undefined
+        : routeMode === "github"
+          ? "coding"
+          : "writing";
+
     try {
       const res = await fetch(`${API}/create`, {
         method: "POST",
@@ -71,8 +78,8 @@ export default function App() {
         body: JSON.stringify({
           course_id: selectedCourse,
           assignment_id: selectedAssignment || undefined,
-          language,
-          assignment_type: assignmentType === "auto" ? undefined : assignmentType,
+          language: routeMode === "notion" ? undefined : language,
+          assignment_type: assignmentType,
         }),
       });
       const data = await parseResponse(res);
@@ -150,31 +157,73 @@ export default function App() {
           </Section>
         )}
 
-        {/* Step 3 - Options */}
+        {/* Step 3 - Route */}
         {selectedCourse && (
-          <Section title="Step 3 — Options">
-            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-              <div>
-                <label style={{ fontSize: 12, color: "#94a3b8", display: "block", marginBottom: 4 }}>Language</label>
-                <select value={language} onChange={e => setLanguage(e.target.value)}
-                  style={{ background: "#1e293b", border: "1px solid #334155", color: "#e2e8f0", padding: "8px 12px", borderRadius: 8, fontSize: 14 }}>
+          <Section title="Step 3 — Choose Destination">
+            <p style={{ marginTop: 0, marginBottom: "0.9rem", color: "#94a3b8", fontSize: 14 }}>
+              Pick how this assignment should be routed.
+            </p>
+
+            <div style={{ display: "grid", gap: "0.7rem", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+              {[
+                { key: "auto", title: "Auto Route", subtitle: "Infer coding vs writing" },
+                { key: "github", title: "GitHub", subtitle: "Force coding destination" },
+                { key: "notion", title: "Notion", subtitle: "Force writing destination" },
+              ].map((option) => (
+                <button
+                  key={option.key}
+                  onClick={() => setRouteMode(option.key)}
+                  style={{
+                    textAlign: "left",
+                    borderRadius: 10,
+                    border: "1px solid",
+                    borderColor: routeMode === option.key ? "#6366f1" : "#334155",
+                    background: routeMode === option.key ? "#1e1b4b" : "#1e293b",
+                    padding: "0.8rem 0.9rem",
+                    color: "#e2e8f0",
+                    cursor: "pointer",
+                  }}
+                >
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{option.title}</div>
+                  <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>{option.subtitle}</div>
+                </button>
+              ))}
+            </div>
+
+            {routeMode !== "notion" && (
+              <div style={{ marginTop: "1rem" }}>
+                <label style={{ fontSize: 12, color: "#94a3b8", display: "block", marginBottom: 4 }}>
+                  Starter Language (GitHub path)
+                </label>
+                <select
+                  value={language}
+                  onChange={e => setLanguage(e.target.value)}
+                  style={{ background: "#1e293b", border: "1px solid #334155", color: "#e2e8f0", padding: "8px 12px", borderRadius: 8, fontSize: 14 }}
+                >
                   {["python", "java", "javascript", "cpp"].map(l => <option key={l}>{l}</option>)}
                 </select>
               </div>
-              <div>
-                <label style={{ fontSize: 12, color: "#94a3b8", display: "block", marginBottom: 4 }}>Assignment Type</label>
-                <select value={assignmentType} onChange={e => setAssignmentType(e.target.value)}
-                  style={{ background: "#1e293b", border: "1px solid #334155", color: "#e2e8f0", padding: "8px 12px", borderRadius: 8, fontSize: 14 }}>
-                  <option value="auto">Auto-detect</option>
-                  <option value="coding">Coding → GitHub</option>
-                  <option value="writing">Writing → Notion</option>
-                </select>
-              </div>
+            )}
+
+            {routeMode === "notion" && (
+              <p style={{ marginTop: "0.8rem", marginBottom: 0, color: "#94a3b8", fontSize: 13 }}>
+                Language is skipped for Notion page creation.
+              </p>
+            )}
+
+            <div style={{ marginTop: "1rem", fontSize: 13, color: "#94a3b8" }}>
+              Route summary: {routeMode === "auto" ? "Auto-detect destination" : routeMode === "github" ? "GitHub (coding)" : "Notion (writing)"}
             </div>
 
             <button onClick={handleCreate} disabled={!!loading}
               style={{ marginTop: "1.2rem", background: "#10b981", color: "white", padding: "10px 24px", borderRadius: 8, border: "none", fontSize: 15, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1 }}>
-              {loading === "create" ? "⏳ Creating..." : "🚀 Create Destination"}
+              {loading === "create"
+                ? "⏳ Creating..."
+                : routeMode === "github"
+                  ? "🚀 Create GitHub Repository"
+                  : routeMode === "notion"
+                    ? "📝 Create Notion Page"
+                    : "🚀 Create Destination"}
             </button>
           </Section>
         )}
