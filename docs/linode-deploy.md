@@ -123,6 +123,44 @@ Non-interactive help check:
 ssh root@<LINODE_IP> 'sudo -u canvasagent /opt/canvas-github-agent/.venv/bin/canvas-github-agent --help'
 ```
 
+## 6) Web UI + FastAPI (nginx + systemd)
+
+The repository includes scripts that serve the Vite frontend on port **80** and reverse-proxy **`/api/`** to uvicorn on **127.0.0.1:8010**. The frontend is built with `VITE_API_URL=/api` so the browser calls the API on the same origin.
+
+After the VM has a clone at `/opt/canvas-github-agent` (bootstrap or manual), **push the latest `main` from your laptop**, then on the server:
+
+```bash
+ssh root@<LINODE_IP> 'sudo -u canvasagent bash -lc "cd /opt/canvas-github-agent && git fetch origin && git checkout main && git pull --ff-only"'
+ssh root@<LINODE_IP> 'sudo bash /opt/canvas-github-agent/scripts/linode/install_web_stack.sh'
+```
+
+Add or adjust these in `/opt/canvas-github-agent/.env` (use your real public URL or IP):
+
+```env
+CANVAS_USE_MCP=false
+SERVICE_BASE_URL=http://<LINODE_PUBLIC_IP>/api
+FRONTEND_ORIGINS=http://<LINODE_PUBLIC_IP>
+```
+
+Then restart the API so env is picked up:
+
+```bash
+ssh root@<LINODE_IP> 'systemctl restart canvas-github-agent-api.service'
+```
+
+Smoke checks:
+
+```bash
+curl -sS "http://<LINODE_PUBLIC_IP>/api/health"
+curl -sS -o /dev/null -w "%{http_code}" "http://<LINODE_PUBLIC_IP>/"
+```
+
+Later upgrades (pull `main`, reinstall deps, rebuild frontend, restart API):
+
+```bash
+ssh root@<LINODE_IP> 'sudo bash /opt/canvas-github-agent/scripts/linode/update_web_release.sh'
+```
+
 ## Notes
 
 - The bootstrap script installs Node.js 20 so Smithery/MCP tooling can run.
@@ -130,8 +168,4 @@ ssh root@<LINODE_IP> 'sudo -u canvasagent /opt/canvas-github-agent/.venv/bin/can
 - `COURSE_CONTEXT_CHROMA_PATH` should point to a writable persistent directory, ideally outside `/opt/canvas-github-agent`.
 - Back up the Chroma directory the same way you back up other application data; it contains the indexed course materials needed for retrieval.
 - If your repo is private, use an authenticated clone URL or configure SSH deploy keys first.
-- If you changed branch names, SSH in and run:
-
-```bash
-ssh root@<LINODE_IP> 'cd /opt/canvas-github-agent && sudo -u canvasagent git fetch --all && sudo -u canvasagent git checkout deploy/linode'
-```
+- Track **`main`** for production; redeploy with `scripts/linode/update_web_release.sh` after pulling.
