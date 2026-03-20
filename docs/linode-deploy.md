@@ -52,12 +52,45 @@ GITHUB_TOKEN=...
 GITHUB_USERNAME=...
 NOTION_TOKEN=...
 NOTION_PARENT_PAGE_ID=...
+COURSE_CONTEXT_CHROMA_PATH=/var/lib/canvas-github-agent/chroma
 ```
 
 Optional hardening: set file ownership and permissions.
 
 ```bash
 ssh root@<LINODE_IP> "chown canvasagent:canvasagent /opt/canvas-github-agent/.env && chmod 600 /opt/canvas-github-agent/.env"
+```
+
+## 4a) Create persistent Chroma storage
+
+Do not keep production Chroma data inside the git checkout. Put it on a durable path owned by the app user.
+
+```bash
+ssh root@<LINODE_IP> 'mkdir -p /var/lib/canvas-github-agent/chroma && chown -R canvasagent:canvasagent /var/lib/canvas-github-agent'
+```
+
+If you attach a Linode Block Storage volume for course data, mount it first and point `COURSE_CONTEXT_CHROMA_PATH` at the mounted directory instead.
+
+## 4b) Upload and ingest course documents
+
+Because course PDFs are gitignored, copy them to the VM separately before ingesting them.
+
+```bash
+scp "docs/AAI6660_Spring_2026 (1).pdf" root@<LINODE_IP>:/tmp/AAI6660_Spring_2026.pdf
+ssh root@<LINODE_IP> 'chown canvasagent:canvasagent /tmp/AAI6660_Spring_2026.pdf'
+ssh root@<LINODE_IP> 'cd /opt/canvas-github-agent && sudo -u canvasagent ./.venv/bin/python app/agent.py ingest-pdf --course-id 6660 --file-path /tmp/AAI6660_Spring_2026.pdf --document-name "AAI6660 Spring 2026 Slides"'
+```
+
+Verify the indexed document:
+
+```bash
+ssh root@<LINODE_IP> 'cd /opt/canvas-github-agent && sudo -u canvasagent ./.venv/bin/python app/agent.py list-documents --course-id 6660'
+```
+
+Verify retrieval:
+
+```bash
+ssh root@<LINODE_IP> 'cd /opt/canvas-github-agent && sudo -u canvasagent ./.venv/bin/python app/agent.py search-context --course-id 6660 --query "Bayes theorem posterior update" --limit 3'
 ```
 
 ## 5) Verify install and run
@@ -84,6 +117,8 @@ ssh root@<LINODE_IP> 'sudo -u canvasagent /opt/canvas-github-agent/.venv/bin/can
 
 - The bootstrap script installs Node.js 20 so Smithery/MCP tooling can run.
 - For unattended VM deployments, `CANVAS_USE_MCP=false` avoids browser OAuth callback issues.
+- `COURSE_CONTEXT_CHROMA_PATH` should point to a writable persistent directory, ideally outside `/opt/canvas-github-agent`.
+- Back up the Chroma directory the same way you back up other application data; it contains the indexed course materials needed for retrieval.
 - If your repo is private, use an authenticated clone URL or configure SSH deploy keys first.
 - If you changed branch names, SSH in and run:
 
