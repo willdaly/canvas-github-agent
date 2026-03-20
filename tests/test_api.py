@@ -1,6 +1,14 @@
-from fastapi.testclient import TestClient
+import asyncio
+
+from httpx import ASGITransport, AsyncClient
 
 import api
+
+
+async def _request(method, url, payload=None):
+    transport = ASGITransport(app=api.app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        return await client.request(method, url, json=payload)
 
 
 class StubCanvasTools:
@@ -40,9 +48,7 @@ class StubAgentError:
 
 def test_get_courses_success(monkeypatch):
     monkeypatch.setattr(api, "CanvasTools", StubCanvasTools)
-
-    client = TestClient(api.app)
-    response = client.get("/courses")
+    response = asyncio.run(_request("GET", "/courses"))
 
     assert response.status_code == 200
     assert response.json() == {"courses": [{"id": 1, "name": "Course One"}]}
@@ -50,9 +56,7 @@ def test_get_courses_success(monkeypatch):
 
 def test_get_assignments_success(monkeypatch):
     monkeypatch.setattr(api, "CanvasTools", StubCanvasTools)
-
-    client = TestClient(api.app)
-    response = client.get("/courses/123/assignments")
+    response = asyncio.run(_request("GET", "/courses/123/assignments"))
 
     assert response.status_code == 200
     assert response.json() == {
@@ -62,16 +66,17 @@ def test_get_assignments_success(monkeypatch):
 
 def test_create_success(monkeypatch):
     monkeypatch.setattr(api, "CanvasGitHubAgent", StubAgentSuccess)
-
-    client = TestClient(api.app)
-    response = client.post(
-        "/create",
-        json={
+    response = asyncio.run(
+        _request(
+            "POST",
+            "/create",
+            {
             "course_id": 123,
             "assignment_id": 777,
             "language": "python",
             "assignment_type": "coding",
-        },
+            },
+        )
     )
 
     assert response.status_code == 200
@@ -83,12 +88,7 @@ def test_create_success(monkeypatch):
 
 def test_create_returns_400_when_agent_returns_none(monkeypatch):
     monkeypatch.setattr(api, "CanvasGitHubAgent", StubAgentNone)
-
-    client = TestClient(api.app)
-    response = client.post(
-        "/create",
-        json={"course_id": 123, "language": "python"},
-    )
+    response = asyncio.run(_request("POST", "/create", {"course_id": 123, "language": "python"}))
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Agent failed to create destination."
@@ -96,9 +96,7 @@ def test_create_returns_400_when_agent_returns_none(monkeypatch):
 
 def test_get_courses_sanitizes_internal_errors(monkeypatch):
     monkeypatch.setattr(api, "CanvasTools", StubCanvasToolsError)
-
-    client = TestClient(api.app)
-    response = client.get("/courses")
+    response = asyncio.run(_request("GET", "/courses"))
 
     assert response.status_code == 500
     assert response.json()["detail"] == "Failed to fetch courses."
@@ -106,9 +104,7 @@ def test_get_courses_sanitizes_internal_errors(monkeypatch):
 
 def test_get_assignments_sanitizes_internal_errors(monkeypatch):
     monkeypatch.setattr(api, "CanvasTools", StubCanvasToolsError)
-
-    client = TestClient(api.app)
-    response = client.get("/courses/123/assignments")
+    response = asyncio.run(_request("GET", "/courses/123/assignments"))
 
     assert response.status_code == 500
     assert response.json()["detail"] == "Failed to fetch assignments."
@@ -116,12 +112,7 @@ def test_get_assignments_sanitizes_internal_errors(monkeypatch):
 
 def test_create_sanitizes_internal_errors(monkeypatch):
     monkeypatch.setattr(api, "CanvasGitHubAgent", StubAgentError)
-
-    client = TestClient(api.app)
-    response = client.post(
-        "/create",
-        json={"course_id": 123, "language": "python"},
-    )
+    response = asyncio.run(_request("POST", "/create", {"course_id": 123, "language": "python"}))
 
     assert response.status_code == 500
     assert response.json()["detail"] == "Failed to create destination."
