@@ -42,6 +42,7 @@ class CreateRequest(BaseModel):
     assignment_id: Optional[int] = None
     language: str = "python"
     assignment_type: Optional[str] = None  # "coding" or "writing"
+    notion_content_mode: Optional[str] = None  # "structured" or "text"
 
 
 @app.get("/courses")
@@ -85,6 +86,7 @@ async def create_destination(req: CreateRequest):
             assignment_id=req.assignment_id,
             language=req.language,
             assignment_type=req.assignment_type,
+            notion_content_mode=req.notion_content_mode,
         )
         if not result:
             raise HTTPException(status_code=400, detail="Agent failed to create destination.")
