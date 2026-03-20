@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch, AsyncMock
 
 import pytest
 from scaffolding.templates import (
+    assignment_mentions_jupyter_notebook,
     generate_starter_files,
     get_template_for_language,
     build_agent_fact_card,
@@ -122,12 +123,26 @@ class TestTemplates:
         """Extract explicit filenames from assignment instructions."""
         text = (
             "This file must be named maze_solvers.py. "
-            "Initialize `maze.txt` and include a report in Report.md."
+            "Initialize `maze.txt`, include a report in Report.md, "
+            "and submit analysis.ipynb."
         )
         files = extract_required_filenames(text)
         assert "maze_solvers.py" in files
         assert "maze.txt" in files
         assert "Report.md" in files
+        assert "analysis.ipynb" in files
+
+    def test_assignment_mentions_jupyter_notebook(self):
+        """Detect explicit notebook submission requirements."""
+        assert assignment_mentions_jupyter_notebook(
+            "Submission: upload a Jupyter notebook file."
+        )
+        assert assignment_mentions_jupyter_notebook(
+            "Turn in your work as an analysis.ipynb file."
+        )
+        assert not assignment_mentions_jupyter_notebook(
+            "Implement the functions in main.py and submit your code."
+        )
 
     def test_extract_required_function_names(self):
         """Extract required function names from assignment examples."""
@@ -196,6 +211,39 @@ class TestTemplates:
         assert "clean_data <- function()" in files["analysis.R"]
         assert "build_plot <- function()" in files["analysis.R"]
         assert "main <- function()" not in files["analysis.R"]
+
+    def test_python_notebook_added_when_submission_mentions_jupyter(self):
+        """Add a notebook scaffold for Python notebook submissions."""
+        files = generate_starter_files(
+            assignment_name="Notebook Assignment",
+            assignment_description=(
+                "Submission information: upload a Jupyter notebook. "
+                "Implement the functions clean_data and build_chart."
+            ),
+            due_date="2026-03-19",
+            language="python",
+        )
+
+        assert "main.ipynb" in files
+        assert '"cell_type": "markdown"' in files["main.ipynb"]
+        assert '"cell_type": "code"' in files["main.ipynb"]
+        assert "def clean_data():" in files["main.ipynb"]
+        assert "def build_chart():" in files["main.ipynb"]
+
+    def test_python_notebook_uses_explicit_filename(self):
+        """Honor an explicit notebook filename from the assignment brief."""
+        files = generate_starter_files(
+            assignment_name="Analysis Notebook",
+            assignment_description=(
+                "Create a file named analysis.ipynb. "
+                "Your submission should be a notebook upload."
+            ),
+            due_date="2026-03-19",
+            language="python",
+        )
+
+        assert "analysis.ipynb" in files
+        assert "main.ipynb" not in files
 
 
 class TestCanvasTools:
