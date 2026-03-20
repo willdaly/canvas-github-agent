@@ -178,6 +178,7 @@ class CanvasGitHubAgent:
         assignment: dict,
         language: str = "python",
         course_context: Optional[Sequence[dict]] = None,
+        assignment_artifacts: Optional[Sequence[dict]] = None,
     ) -> Optional[dict]:
         """Create a GitHub repository with assignment starter files."""
         assignment_name = assignment.get("name", "Assignment")
@@ -212,6 +213,7 @@ class CanvasGitHubAgent:
             due_date=due_at,
             language=language,
             course_context=list(course_context or []),
+            assignment_artifacts=list(assignment_artifacts or []),
         )
 
         owner = self.github_org if self.github_org else self.github_username
@@ -230,9 +232,26 @@ class CanvasGitHubAgent:
             "repository": repo,
             "assignment": assignment,
             "course_context": list(course_context or []),
+            "assignment_artifacts": list(assignment_artifacts or []),
             "files_created": list(starter_files.keys()),
             "files_uploaded": files_ok,
         }
+
+    async def fetch_assignment_artifacts(self, course_id: int, assignment: dict) -> list[dict[str, Any]]:
+        """Download linked text-maze artifacts from the assignment brief when available."""
+        try:
+            artifacts = await asyncio.to_thread(
+                self.canvas_tools.download_assignment_maze_artifacts,
+                course_id,
+                assignment,
+            )
+        except Exception as error:
+            print(f"\n⚠️  Assignment artifact download failed: {error}")
+            return []
+
+        if artifacts:
+            print(f"\n🧪 Downloaded {len(artifacts)} linked maze artifact(s) from the assignment brief.")
+        return artifacts
 
     async def create_notion_page_for_assignment(self, assignment: dict) -> Optional[dict]:
         """Create a Notion page for a writing assignment."""
@@ -348,11 +367,13 @@ class CanvasGitHubAgent:
         print(f"\n🧭 Assignment type selected: {assignment_type}")
 
         if assignment_type == "coding":
+            assignment_artifacts = await self.fetch_assignment_artifacts(course_id, assignment)
             print(f"\n🚀 Creating GitHub repository with {language} starter code...")
             result = await self.create_repository_for_assignment(
                 assignment,
                 language,
                 course_context=course_context,
+                assignment_artifacts=assignment_artifacts,
             )
 
             if not result or "repository" not in result:

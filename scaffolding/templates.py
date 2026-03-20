@@ -1226,6 +1226,126 @@ def _append_maze_readme_notes(existing_readme: str) -> str:
     )
 
 
+def _build_maze_benchmark_file(function_names: List[str], artifact_paths: List[str]) -> str:
+    solver_names = list(function_names[:3])
+    defaults = ["maze_solver_one", "maze_solver_two", "maze_solver_three"]
+    for default_name in defaults:
+        if len(solver_names) >= 3:
+            break
+        if default_name not in solver_names:
+            solver_names.append(default_name)
+
+    default_candidates = [*artifact_paths, "maze.txt"]
+    candidate_lines = "\n".join(f'    "{path}",' for path in default_candidates)
+
+    return (
+        '"""Benchmark helper for generated maze assignments."""\n\n'
+        "from __future__ import annotations\n\n"
+        "import json\n"
+        "import sys\n"
+        "import tracemalloc\n"
+        "from pathlib import Path\n"
+        "from time import perf_counter\n\n"
+        f"from maze_solvers import {solver_names[0]}, {solver_names[1]}, {solver_names[2]}\n\n"
+        "DEFAULT_MAZE_CANDIDATES = [\n"
+        f"{candidate_lines}\n"
+        "]\n\n"
+        "def _pick_maze_path(explicit_path: str | None = None) -> str:\n"
+        "    if explicit_path:\n"
+        "        return explicit_path\n"
+        "    for candidate in DEFAULT_MAZE_CANDIDATES:\n"
+        "        if Path(candidate).exists():\n"
+        "            return candidate\n"
+        '    return "maze.txt"\n\n'
+        "def _path_cell_count(solved_maze: str) -> int:\n"
+        '    body = "\\n".join(solved_maze.splitlines()[1:])\n'
+        '    return body.count("*") + 2\n\n'
+        "def _run_single(name: str, solver, maze_path: str) -> dict:\n"
+        "    tracemalloc.start()\n"
+        "    started_at = perf_counter()\n"
+        "    solved_maze = solver(maze_path)\n"
+        "    runtime_seconds = perf_counter() - started_at\n"
+        "    _, peak_bytes = tracemalloc.get_traced_memory()\n"
+        "    tracemalloc.stop()\n"
+        "    return {\n"
+        '        "algorithm": name,\n'
+        '        "runtime_seconds": round(runtime_seconds, 6),\n'
+        '        "peak_memory_bytes": peak_bytes,\n'
+        '        "path_cell_count": _path_cell_count(solved_maze),\n'
+        '        "solved_maze": solved_maze,\n'
+        "    }\n\n"
+        "def benchmark_solvers(maze_path: str | None = None) -> dict:\n"
+        "    selected_maze = _pick_maze_path(maze_path)\n"
+        "    results = [\n"
+        f'        _run_single("{solver_names[0]}", {solver_names[0]}, selected_maze),\n'
+        f'        _run_single("{solver_names[1]}", {solver_names[1]}, selected_maze),\n'
+        f'        _run_single("{solver_names[2]}", {solver_names[2]}, selected_maze),\n'
+        "    ]\n"
+        "    return {\n"
+        '        "maze_path": selected_maze,\n'
+        '        "results": results,\n'
+        "    }\n\n"
+        "def _build_markdown_report(payload: dict) -> str:\n"
+        "    lines = [\n"
+        '        "# Maze Benchmark Results",\n'
+        '        "",\n'
+        '        f"- Maze: {payload[\"maze_path\"]}",\n'
+        '        "",\n'
+        '        "| Algorithm | Runtime (s) | Peak Memory (bytes) | Path Cells |",\n'
+        '        "| --- | ---: | ---: | ---: |",\n'
+        "    ]\n"
+        "    for result in payload[\"results\"]:\n"
+        "        lines.append(\n"
+        '            f"| {result[\"algorithm\"]} | {result[\"runtime_seconds\"]:.6f} | {result[\"peak_memory_bytes\"]} | {result[\"path_cell_count\"]} |"\n'
+        "        )\n"
+        '    return "\\n".join(lines) + "\\n"\n\n'
+        "def main() -> None:\n"
+        "    maze_path = sys.argv[1] if len(sys.argv) > 1 else None\n"
+        "    payload = benchmark_solvers(maze_path)\n"
+        '    Path("benchmark_results.json").write_text(json.dumps(payload, indent=2) + "\\n", encoding="utf-8")\n'
+        '    Path("BENCHMARK_RESULTS.md").write_text(_build_markdown_report(payload), encoding="utf-8")\n'
+        '    print(json.dumps(payload, indent=2))\n\n'
+        'if __name__ == "__main__":\n'
+        "    main()\n"
+    )
+
+
+def _build_artifact_readme(assignment_artifacts: List[Dict[str, Any]]) -> str:
+    lines = [
+        "# Assignment Artifacts",
+        "",
+        "Downloaded maze files from assignment links are stored here.",
+        "",
+    ]
+    for artifact in assignment_artifacts:
+        lines.append(
+            f"- {artifact.get('path', '').split('/')[-1]}: {artifact.get('source_url', 'unknown source')}"
+        )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _append_maze_benchmark_notes(existing_readme: str, artifact_paths: List[str]) -> str:
+    lines = [
+        "",
+        "## Maze Benchmarking",
+        "- Run `python benchmark_maze.py` to benchmark the generated BFS, DFS, and A* solvers.",
+        "- The script writes machine-readable results to `benchmark_results.json` and a report-ready table to `BENCHMARK_RESULTS.md`.",
+    ]
+    if artifact_paths:
+        lines.append(f"- Benchmarking will prefer the downloaded maze artifact files: {', '.join(artifact_paths)}.")
+    else:
+        lines.append("- If no linked maze artifacts are available, benchmarking falls back to `maze.txt`.")
+    return existing_readme.rstrip() + "\n" + "\n".join(lines) + "\n"
+
+
+def _append_maze_report_notes(existing_report: str) -> str:
+    return existing_report.rstrip() + (
+        "\n\n## Generated Benchmark Workflow\n\n"
+        "Run `python benchmark_maze.py [optional-maze-path]` after you add the official report maze. "
+        "Copy the metrics from `BENCHMARK_RESULTS.md` into the comparison sections above.\n"
+    )
+
+
 def build_assignment_specific_files(
     assignment_name: str,
     assignment_description: str,
@@ -1315,6 +1435,7 @@ def generate_starter_files(
     language: str = "python",
     short_description: str = "",
     course_context: Optional[List[Dict[str, Any]]] = None,
+    assignment_artifacts: Optional[List[Dict[str, Any]]] = None,
 ) -> dict:
     """
     Generate starter files for an assignment.
@@ -1373,8 +1494,32 @@ def generate_starter_files(
         )
     )
 
+    maze_artifacts = list(assignment_artifacts or [])
+
     if language.lower() in {"python", "py"} and "maze_solvers.py" in files:
+        maze_functions = [
+            function_name
+            for function_name in extract_required_function_names(assignment_description)
+            if function_name.startswith("maze_solver_") or function_name in {
+                "maze_solver_one",
+                "maze_solver_two",
+                "maze_solver_three",
+            }
+        ] or ["maze_solver_one", "maze_solver_two", "maze_solver_three"]
+        artifact_paths = [artifact.get("path") for artifact in maze_artifacts if artifact.get("path")]
+        files["benchmark_maze.py"] = _build_maze_benchmark_file(maze_functions, artifact_paths)
         files["README.md"] = _append_maze_readme_notes(files["README.md"])
+        files["README.md"] = _append_maze_benchmark_notes(files["README.md"], artifact_paths)
+        files["Report.md"] = _append_maze_report_notes(files["Report.md"])
+
+        for artifact in maze_artifacts:
+            artifact_path = artifact.get("path")
+            artifact_content = artifact.get("content")
+            if artifact_path and artifact_content:
+                files[artifact_path] = artifact_content
+
+        if maze_artifacts:
+            files["artifacts/README.md"] = _build_artifact_readme(maze_artifacts)
 
     if language.lower() in {"python", "py"}:
         inferred_imports = infer_python_assignment_imports(assignment_description)
