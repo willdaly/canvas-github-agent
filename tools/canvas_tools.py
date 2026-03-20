@@ -5,6 +5,7 @@ aryankeluskar/canvas-mcp server via the Smithery CLI (stdio transport).
 import os
 import json
 import re
+import time
 import requests
 from typing import Dict, List, Optional, Any
 from mcp import ClientSession, StdioServerParameters
@@ -16,6 +17,8 @@ from scaffolding.templates import html_to_markdown
 
 class CanvasTools:
     """Tools for interacting with Canvas LMS via the Smithery Canvas MCP server."""
+
+    _shared_cache: dict[str, tuple[float, Any]] = {}
     
     def __init__(self):
         self.canvas_url = os.getenv("CANVAS_API_URL", "https://canvas.instructure.com")
@@ -23,6 +26,37 @@ class CanvasTools:
         self.use_mcp = os.getenv("CANVAS_USE_MCP", "true").strip().lower() in {
             "1", "true", "yes", "on"
         }
+        self.module_cache_ttl_seconds = max(
+            int(os.getenv("CANVAS_MODULE_CACHE_TTL_SECONDS", "300") or "300"),
+            0,
+        )
+
+    @classmethod
+    def clear_shared_cache(cls) -> None:
+        """Clear the in-process cache used for repeated module lookups."""
+        cls._shared_cache.clear()
+
+    def _cache_key(self, *parts: Any) -> str:
+        return "::".join(str(part) for part in (self.canvas_url.rstrip("/"), *parts))
+
+    def _cache_get(self, key: str) -> Any:
+        if self.module_cache_ttl_seconds <= 0:
+            return None
+
+        cached = self._shared_cache.get(key)
+        if not cached:
+            return None
+
+        stored_at, value = cached
+        if time.monotonic() - stored_at > self.module_cache_ttl_seconds:
+            self._shared_cache.pop(key, None)
+            return None
+        return value
+
+    def _cache_set(self, key: str, value: Any) -> Any:
+        if self.module_cache_ttl_seconds > 0:
+            self._shared_cache[key] = (time.monotonic(), value)
+        return value
 
     def _canvas_headers(self) -> Dict[str, str]:
         if not self.canvas_token:
@@ -94,6 +128,11 @@ class CanvasTools:
         }
 
     def _direct_get_course_modules(self, course_id: int) -> List[Dict[str, Any]]:
+        cache_key = self._cache_key("modules", course_id)
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return cached
+
         response = requests.get(
             f"{self.canvas_url.rstrip('/')}/api/v1/courses/{course_id}/modules",
             headers=self._canvas_headers(),
@@ -102,34 +141,52 @@ class CanvasTools:
         )
         response.raise_for_status()
         modules = response.json()
-        return [self._normalize_module(module) for module in modules]
+        return self._cache_set(
+            cache_key,
+            [self._normalize_module(module) for module in modules],
+        )
 
     def _direct_get_assignment(self, course_id: int, assignment_id: int) -> Dict[str, Any]:
+        cache_key = self._cache_key("assignment", course_id, assignment_id)
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return cached
+
         response = requests.get(
             f"{self.canvas_url.rstrip('/')}/api/v1/courses/{course_id}/assignments/{assignment_id}",
             headers=self._canvas_headers(),
             timeout=30,
         )
         response.raise_for_status()
-        return self._normalize_assignment(response.json())
+        return self._cache_set(cache_key, self._normalize_assignment(response.json()))
 
     def _direct_get_page(self, course_id: int, page_url: str) -> Dict[str, Any]:
+        cache_key = self._cache_key("page", course_id, page_url)
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return cached
+
         response = requests.get(
             f"{self.canvas_url.rstrip('/')}/api/v1/courses/{course_id}/pages/{page_url}",
             headers=self._canvas_headers(),
             timeout=30,
         )
         response.raise_for_status()
-        return response.json()
+        return self._cache_set(cache_key, response.json())
 
     def _direct_get_discussion_topic(self, course_id: int, topic_id: int) -> Dict[str, Any]:
+        cache_key = self._cache_key("discussion", course_id, topic_id)
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return cached
+
         response = requests.get(
             f"{self.canvas_url.rstrip('/')}/api/v1/courses/{course_id}/discussion_topics/{topic_id}",
             headers=self._canvas_headers(),
             timeout=30,
         )
         response.raise_for_status()
-        return response.json()
+        return self._cache_set(cache_key, response.json())
 
     @staticmethod
     def _query_terms(query: str) -> list[str]:
@@ -172,6 +229,21 @@ class CanvasTools:
         module: Dict[str, Any],
         item: Dict[str, Any],
     ) -> Optional[Dict[str, Any]]:
+        cache_key = self._cache_key(
+            "module-item-context",
+            course_id,
+            module.get("id"),
+            item.get("id"),
+            item.get("type"),
+            item.get("content_id"),
+            item.get("page_url"),
+            item.get("external_url"),
+            item.get("url"),
+        )
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return cached
+
         title = item.get("title") or item.get("page_url") or item.get("type", "Module Item")
         item_type = item.get("type", "Unknown")
         text_parts = [
@@ -212,7 +284,15 @@ class CanvasTools:
         text = "\n\n".join(part.strip() for part in text_parts if part and part.strip())
         if not text.strip():
             return None
-        return self._build_module_context_entry(course_id=course_id, module=module, item=item_with_title, text=text)
+        return self._cache_set(
+            cache_key,
+            self._build_module_context_entry(
+                course_id=course_id,
+                module=module,
+                item=item_with_title,
+                text=text,
+            ),
+        )
 
     def _score_module_context(self, query_terms: list[str], entry: Dict[str, Any]) -> int:
         haystack = " ".join(
