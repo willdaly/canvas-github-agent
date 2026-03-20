@@ -304,6 +304,27 @@ class TestCanvasTools:
             assert result == [{'id': 2, 'name': 'HW1'}]
             direct_mock.assert_called_once_with(123)
 
+    def test_normalize_assignment_marks_completed_from_submission(self):
+        """Assignment normalization should expose completion-friendly fields."""
+        from tools.canvas_tools import CanvasTools
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_URL': 'https://test.canvas.com',
+            'CANVAS_API_TOKEN': 'test_token'
+        }):
+            tools = CanvasTools()
+            assignment = tools._normalize_assignment({
+                'id': 7,
+                'name': 'Essay Draft',
+                'description': 'Submit draft',
+                'due_at': '2026-03-20T12:00:00Z',
+                'submission': {'workflow_state': 'submitted', 'submitted_at': '2026-03-18T11:00:00Z'},
+            })
+
+        assert assignment['is_completed'] is True
+        assert assignment['workflow_state'] == 'submitted'
+        assert assignment['submitted_at'] == '2026-03-18T11:00:00Z'
+
 
 class TestGitHubTools:
     """Test GitHub tools (mock tests)."""
