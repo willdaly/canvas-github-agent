@@ -9,6 +9,8 @@
     "list_assignments",
     "fetch_assignment",
     "infer_assignment_type",
+    "list_course_modules",
+    "search_course_modules",
     "ingest_course_document",
     "search_course_context",
     "create_github_repository",
@@ -59,6 +61,10 @@
     ],
     "course_context_backend": "chroma",
     "course_context_parser": "docling",
+    "course_context_sources": [
+      "canvas_modules",
+      "chroma_documents"
+    ],
     "supported_course_document_formats": [
       "pdf"
     ],

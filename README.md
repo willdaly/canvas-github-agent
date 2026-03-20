@@ -78,6 +78,7 @@ Command mode:
 ```bash
 canvas-github-agent list-courses
 canvas-github-agent list-assignments --course-id 12345
+canvas-github-agent list-modules --course-id 12345
 canvas-github-agent create-repo --course-id 12345
 canvas-github-agent create-repo --course-id 12345 --assignment-id 67890
 canvas-github-agent create-repo --course-id 12345 --language r
@@ -86,6 +87,7 @@ canvas-github-agent create-repo --course-id 12345 --confirm-type
 canvas-github-agent ingest-pdf --course-id 12345 --file-path "docs/AAI6660_Spring_2026 (1).pdf"
 canvas-github-agent list-documents --course-id 12345
 canvas-github-agent search-context --course-id 12345 --query "Bayes theorem posterior update"
+canvas-github-agent search-modules --course-id 12345 --query "Bayes theorem posterior update"
 ```
 
 ## API Endpoints
@@ -94,6 +96,8 @@ canvas-github-agent search-context --course-id 12345 --query "Bayes theorem post
 - GET /capabilities
 - GET /courses
 - GET /courses/{course_id}/assignments
+- GET /courses/{course_id}/modules
+- POST /courses/{course_id}/modules/search
 - POST /courses/{course_id}/documents/ingest
 - GET /courses/{course_id}/documents
 - POST /courses/{course_id}/context/search
@@ -106,7 +110,7 @@ The `/create` endpoint returns a stable `task_result_v1` payload with service, r
 
 The `/tasks` endpoints expose an asynchronous `task_status_v1` lifecycle with `queued`, `running`, `completed`, and `failed` states.
 
-Course PDFs can be ingested with Docling and indexed into a local Chroma store. During assignment creation, the app will search that indexed course context and attach the most relevant excerpts to generated outputs.
+Course PDFs can be ingested with Docling and indexed into a local Chroma store. During assignment creation, the app will search both indexed course documents and live Canvas module content, then attach the most relevant excerpts to generated outputs.
 
 ## MCP Server
 
@@ -122,6 +126,8 @@ Primary MCP tools:
 
 - `list_courses`
 - `list_assignments`
+- `list_course_modules`
+- `search_course_modules`
 - `get_capabilities`
 - `get_oasf_record`
 - `ingest_course_document`
@@ -150,11 +156,15 @@ Claude Desktop expects absolute paths. Update the template paths and env values,
 
 ## Course Context
 
-The repository now supports a local Chroma-backed retrieval store for course reference material such as slide decks.
+The repository now supports two deterministic course-context sources:
 
-- Use Docling to parse the PDF into markdown-like text chunks
+- live Canvas module content retrieved through the Canvas API
+- a local Chroma-backed retrieval store for reference material such as slide decks
+
+- Read module pages, assignments, and discussion topics from Canvas and rank the most relevant excerpts against the assignment text
+- Use Docling to parse PDFs into markdown-like text chunks
 - Store those chunks in Chroma with course-scoped metadata
-- Retrieve relevant excerpts during assignment creation so generated repos and pages can reference the slide deck
+- Retrieve relevant excerpts during assignment creation so generated repos and pages can reference both Canvas modules and uploaded course materials
 
 Local Chroma data is stored under `.chroma/` by default and is ignored by git.
 

@@ -136,6 +136,32 @@ class CanvasGitHubAgent:
         """Return missing Notion environment variables required for writing flow."""
         return get_missing_notion_config()
 
+    @staticmethod
+    def build_context_query(assignment: dict) -> str:
+        """Build a retrieval query from assignment name and description."""
+        assignment_name = assignment.get("name", "").strip()
+        assignment_description = CanvasGitHubAgent.strip_html(assignment.get("description", ""))
+        return "\n\n".join(part for part in [assignment_name, assignment_description] if part).strip()
+
+    @staticmethod
+    def merge_course_context_sources(
+        document_context: Sequence[dict],
+        module_context: Sequence[dict],
+        limit: int = 5,
+    ) -> list[dict[str, Any]]:
+        """Interleave document and module context so both sources can contribute."""
+        merged: list[dict[str, Any]] = []
+        document_items = list(document_context)
+        module_items = list(module_context)
+
+        while len(merged) < max(limit, 1) and (document_items or module_items):
+            if document_items and len(merged) < limit:
+                merged.append(document_items.pop(0))
+            if module_items and len(merged) < limit:
+                merged.append(module_items.pop(0))
+
+        return merged[: max(limit, 1)]
+
     async def fetch_assignment(self, course_id: int, assignment_id: Optional[int] = None) -> dict:
         """Fetch assignment details from Canvas."""
         if assignment_id:
@@ -243,15 +269,16 @@ class CanvasGitHubAgent:
         return {"page": page, "assignment": assignment, "course_context": list(course_context or [])}
 
     async def fetch_course_context(self, course_id: int, assignment: dict, limit: int = 5) -> list[dict[str, Any]]:
-        """Retrieve relevant course-document chunks for the given assignment."""
-        assignment_name = assignment.get("name", "").strip()
-        assignment_description = self.strip_html(assignment.get("description", ""))
-        query = "\n\n".join(part for part in [assignment_name, assignment_description] if part).strip()
+        """Retrieve relevant course-document and module context for the given assignment."""
+        query = self.build_context_query(assignment)
         if not query:
             return []
 
+        document_context: list[dict[str, Any]] = []
+        module_context: list[dict[str, Any]] = []
+
         try:
-            results = await asyncio.to_thread(
+            document_context = await asyncio.to_thread(
                 self.course_context_tools.search_context,
                 course_id,
                 query,
@@ -262,10 +289,27 @@ class CanvasGitHubAgent:
             return []
         except Exception as error:
             print(f"\n⚠️  Course context search failed: {error}")
-            return []
+            document_context = []
+
+        try:
+            module_context = await self.canvas_tools.search_course_module_context(
+                course_id,
+                query,
+                limit,
+            )
+        except Exception as error:
+            print(f"\n⚠️  Course module search failed: {error}")
+            module_context = []
+
+        if document_context:
+            print(f"\n📎 Retrieved {len(document_context)} course document matches from your indexed course materials.")
+        if module_context:
+            print(f"\n📚 Retrieved {len(module_context)} course module matches from Canvas.")
+
+        results = self.merge_course_context_sources(document_context, module_context, limit)
 
         if results:
-            print(f"\n📎 Retrieved {len(results)} course context matches from your course documents.")
+            print(f"\n🧩 Using {len(results)} combined course context matches to support this assignment.")
         return results
 
     async def run(
@@ -411,6 +455,33 @@ async def list_course_documents(course_id: int):
         )
 
 
+async def list_course_modules(course_id: int):
+    """List Canvas modules available for a course."""
+    tools = CanvasTools()
+    modules = await tools.get_course_modules(course_id)
+
+    print(f"\n📚 Canvas modules for course {course_id}")
+    print("-" * 80)
+    for module in modules:
+        print(f"{module['name']} | items={len(module.get('items', []))}")
+
+
+async def search_course_modules(course_id: int, query: str, limit: int = 5):
+    """Search Canvas module content for assignment-relevant context."""
+    tools = CanvasTools()
+    results = await tools.search_course_module_context(course_id, query, limit)
+
+    print(f"\n🔎 Retrieved {len(results)} module context matches")
+    print("-" * 80)
+    for index, item in enumerate(results, start=1):
+        print(f"{index}. {item.get('section_title') or item.get('module_name') or 'Match'}")
+        print(f"   Source: {item.get('document_name', 'Canvas Module')}")
+        print(f"   Type: {item.get('item_type', 'Unknown')}")
+        if item.get("distance") is not None:
+            print(f"   Distance: {item['distance']:.4f}")
+        print(f"   {item.get('text', '')[:400]}\n")
+
+
 async def list_courses():
     """Helper function to list available courses."""
     canvas_tools = CanvasTools()
@@ -463,10 +534,12 @@ async def main():
         choices=[
             "list-courses",
             "list-assignments",
+            "list-modules",
             "create-repo",
             "ingest-pdf",
             "list-documents",
             "search-context",
+            "search-modules",
         ],
         help="Command to execute",
     )
@@ -506,6 +579,11 @@ async def main():
             print("Error: --course-id is required for list-assignments")
             return
         await list_course_assignments(args.course_id)
+    elif args.command == "list-modules":
+        if args.course_id is None:
+            print("Error: --course-id is required for list-modules")
+            return
+        await list_course_modules(args.course_id)
     elif args.command == "create-repo":
         if not args.course_id:
             print("Error: --course-id is required for create-repo")
@@ -534,6 +612,11 @@ async def main():
             print("Error: --course-id and --query are required for search-context")
             return
         await search_course_context(args.course_id, args.query, args.limit)
+    elif args.command == "search-modules":
+        if args.course_id is None or not args.query:
+            print("Error: --course-id and --query are required for search-modules")
+            return
+        await search_course_modules(args.course_id, args.query, args.limit)
 
 
 def run() -> None:

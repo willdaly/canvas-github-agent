@@ -74,6 +74,18 @@ def build_capabilities_payload() -> dict[str, Any]:
                 "description": "List assignments for a Canvas course.",
             },
             {
+                "name": "list_course_modules",
+                "method": "GET",
+                "path": "/courses/{course_id}/modules",
+                "description": "List Canvas modules and module items for a course.",
+            },
+            {
+                "name": "search_course_modules",
+                "method": "POST",
+                "path": "/courses/{course_id}/modules/search",
+                "description": "Search Canvas course module content for assignment-relevant context.",
+            },
+            {
                 "name": "get_oasf_record",
                 "method": "GET",
                 "path": "/metadata/oasf-record",
@@ -148,6 +160,7 @@ def build_capabilities_payload() -> dict[str, Any]:
             "supported_languages": ["python", "r"],
             "course_context_backend": "chroma",
             "course_context_parser": "docling",
+            "course_context_sources": ["canvas_modules", "chroma_documents"],
         },
         "result_schema": {
             "name": TASK_RESULT_SCHEMA,
@@ -431,6 +444,39 @@ async def get_assignments(course_id: int):
     except Exception:
         logger.exception("Failed to list assignments for course_id=%s", course_id)
         raise HTTPException(status_code=500, detail="Failed to fetch assignments.")
+
+
+@app.get("/courses/{course_id}/modules")
+async def get_modules(course_id: int):
+    """Return Canvas modules for a given course."""
+    try:
+        canvas = CanvasTools()
+        modules = await canvas.get_course_modules(course_id)
+        return {"modules": modules}
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to list modules for course_id=%s", course_id)
+        raise HTTPException(status_code=500, detail="Failed to fetch modules.")
+
+
+@app.post("/courses/{course_id}/modules/search")
+async def search_course_modules(course_id: int, req: CourseContextSearchRequest):
+    """Search Canvas course modules for assignment-relevant context."""
+    try:
+        canvas = CanvasTools()
+        results = await canvas.search_course_module_context(course_id, req.query, req.limit)
+        return {
+            "course_id": course_id,
+            "query": req.query,
+            "limit": req.limit,
+            "results": results,
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to search modules for course_id=%s", course_id)
+        raise HTTPException(status_code=500, detail="Failed to search course modules.")
 
 
 @app.post("/courses/{course_id}/documents/ingest")

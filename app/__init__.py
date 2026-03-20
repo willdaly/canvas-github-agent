@@ -5,9 +5,11 @@ from .agent import (
     ingest_course_pdf,
     list_course_assignments,
     list_course_documents,
+	list_course_modules,
     list_courses,
     main,
     search_course_context,
+	search_course_modules,
 )
 from .cli import interactive_mode, print_usage
 
@@ -18,7 +20,9 @@ __all__ = [
 	"list_courses",
 	"list_course_assignments",
 	"list_course_documents",
+	"list_course_modules",
 	"main",
 	"print_usage",
 	"search_course_context",
+	"search_course_modules",
 ]

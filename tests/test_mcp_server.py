@@ -28,6 +28,21 @@ class StubCanvasTools:
     async def get_course_assignments(self, course_id):
         return [{"id": 42, "name": f"Assignment for {course_id}"}]
 
+    async def get_course_modules(self, course_id):
+        return [{"id": 7, "name": f"Module for {course_id}", "items": [{"id": 11, "title": "Bayes Review"}]}]
+
+    async def search_course_module_context(self, course_id, query, limit):
+        return [
+            {
+                "id": "module:123:7:11",
+                "course_id": course_id,
+                "document_name": "Canvas Module: Module for 123",
+                "section_title": "Bayes Review",
+                "item_type": "Page",
+                "text": "Module: Bayes Review\n\nPosterior update explanation.",
+            }
+        ][:limit]
+
 
 class StubAgentSuccess:
     async def run(self, **kwargs):
@@ -84,6 +99,8 @@ def test_server_lists_expected_tools_and_resources():
     assert [tool.name for tool in tools] == [
         "list_courses",
         "list_assignments",
+        "list_course_modules",
+        "search_course_modules",
         "get_capabilities",
         "get_oasf_record",
         "ingest_course_document",
@@ -107,6 +124,29 @@ def test_list_courses_tool(monkeypatch):
     assert _decode_tool_payload(result) == {
         "courses": [{"id": 1, "name": "Course One"}],
     }
+
+
+def test_list_course_modules_tool(monkeypatch):
+    monkeypatch.setattr(api, "CanvasTools", StubCanvasTools)
+
+    result = asyncio.run(mcp_server.server.call_tool("list_course_modules", {"course_id": 123}))
+
+    payload = _decode_tool_payload(result)
+    assert payload["modules"][0]["name"] == "Module for 123"
+
+
+def test_search_course_modules_tool(monkeypatch):
+    monkeypatch.setattr(api, "CanvasTools", StubCanvasTools)
+
+    result = asyncio.run(
+        mcp_server.server.call_tool(
+            "search_course_modules",
+            {"course_id": 123, "query": "posterior update", "limit": 1},
+        )
+    )
+
+    payload = _decode_tool_payload(result)
+    assert payload["results"][0]["section_title"] == "Bayes Review"
 
 
 def test_create_destination_tool(monkeypatch):
