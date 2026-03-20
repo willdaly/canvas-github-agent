@@ -6,6 +6,10 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
