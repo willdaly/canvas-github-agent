@@ -67,7 +67,7 @@ sudo -u "$APP_USER" bash -lc "
 
 cat > /etc/systemd/system/canvas-github-agent-smoke.service <<EOF
 [Unit]
-Description=Canvas GitHub Agent smoke test
+Description=Canvas GitHub Agent retrieval smoke test
 After=network-online.target
 Wants=network-online.target
 
@@ -76,7 +76,7 @@ Type=oneshot
 User=$APP_USER
 WorkingDirectory=$APP_DIR
 EnvironmentFile=-$APP_DIR/.env
-ExecStart=$APP_DIR/.venv/bin/canvas-github-agent --help
+ExecStart=/bin/bash -lc '$APP_DIR/.venv/bin/canvas-github-agent search-context --course-id 1 --query smoke --limit 1 >/dev/null'
 
 [Install]
 WantedBy=multi-user.target
@@ -91,5 +91,5 @@ echo "Next steps:"
 echo "1) Put secrets in $APP_DIR/.env"
 echo "2) Set COURSE_CONTEXT_CHROMA_PATH=$COURSE_CONTEXT_CHROMA_PATH in $APP_DIR/.env if you want the app to use the provisioned Chroma directory"
 echo "3) For non-interactive servers, set CANVAS_USE_MCP=false in .env"
-echo "4) Test interactive mode: sudo -u $APP_USER $APP_DIR/.venv/bin/canvas-github-agent-cli"
-echo "5) Check smoke service: systemctl status canvas-github-agent-smoke.service"
+echo "4) Check retrieval smoke service: systemctl status canvas-github-agent-smoke.service"
+echo "5) Test interactive mode: sudo -u $APP_USER $APP_DIR/.venv/bin/canvas-github-agent-cli"
