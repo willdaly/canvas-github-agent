@@ -7,11 +7,13 @@ Mock tests are provided for basic functionality validation.
 import asyncio
 import json
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import Mock, patch, AsyncMock
 
 import pytest
 from scaffolding.templates import (
     assignment_mentions_jupyter_notebook,
+    build_service_fact_card,
     generate_starter_files,
     get_template_for_language,
     build_agent_fact_card,
@@ -121,6 +123,23 @@ class TestTemplates:
         assert fact_card["name"] == "My Agent"
         assert fact_card["registry"]["url"] == "https://index.projectnanda.org"
         assert fact_card["metadata"]["course"] == "CS5500"
+
+    def test_build_service_fact_card_matches_checked_in_json(self):
+        """The checked-in service fact card should match the generated payload."""
+        expected = build_service_fact_card()
+        fact_card_path = (
+            Path(__file__).resolve().parent.parent
+            / "metadata"
+            / "agent-fact-cards"
+            / "service.canvas-assignment-workflow.fact-card.json"
+        )
+
+        with fact_card_path.open("r", encoding="utf-8") as handle:
+            checked_in = json.load(handle)
+
+        assert checked_in == expected
+        assert checked_in["name"] == "Canvas Assignment Workflow"
+        assert checked_in["metadata"]["architecture"] == "deterministic workflow orchestrator"
 
     def test_extract_required_filenames(self):
         """Extract explicit filenames from assignment instructions."""

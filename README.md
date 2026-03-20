@@ -89,6 +89,10 @@ canvas-github-agent create-repo --course-id 12345 --confirm-type
 
 A Vite frontend is included under frontend/. See frontend/README.md.
 
+## Agent Fact Card
+
+The required service fact card is stored at metadata/agent-fact-cards/service.canvas-assignment-workflow.fact-card.json.
+
 ## Future Enhancements
 
 A richer assignment interpretation step (for more nuanced routing) can be added later as a small extension point in the orchestrator, without introducing a full multi-agent framework.
