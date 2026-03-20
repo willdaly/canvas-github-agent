@@ -100,7 +100,7 @@ def _raise_tool_error(exc: HTTPException) -> None:
 async def list_courses() -> dict[str, Any]:
     """Return the configured user's Canvas courses."""
     try:
-        return await api.get_courses()
+        return await api.get_courses_tools()
     except HTTPException as exc:
         _raise_tool_error(exc)
 
@@ -109,7 +109,7 @@ async def list_courses() -> dict[str, Any]:
 async def list_assignments(course_id: int) -> dict[str, Any]:
     """Return assignments for a Canvas course."""
     try:
-        return await api.get_assignments(course_id)
+        return await api.get_assignments_tools(course_id)
     except HTTPException as exc:
         _raise_tool_error(exc)
 
@@ -118,7 +118,7 @@ async def list_assignments(course_id: int) -> dict[str, Any]:
 async def list_course_modules(course_id: int) -> dict[str, Any]:
     """Return Canvas modules for a course."""
     try:
-        return await api.get_modules(course_id)
+        return await api.get_modules_tools(course_id)
     except HTTPException as exc:
         _raise_tool_error(exc)
 
@@ -127,7 +127,7 @@ async def list_course_modules(course_id: int) -> dict[str, Any]:
 async def search_course_modules(course_id: int, query: str, limit: int = 5) -> dict[str, Any]:
     """Search Canvas module content for relevant context."""
     try:
-        return await api.search_course_modules(
+        return await api.search_course_modules_tools(
             course_id,
             api.CourseContextSearchRequest(query=query, limit=limit),
         )
@@ -158,7 +158,7 @@ async def ingest_course_document(
 ) -> dict[str, Any]:
     """Ingest a course document for later retrieval."""
     try:
-        return await api.ingest_course_document(
+        return await api.ingest_course_document_tools(
             course_id,
             api.CourseDocumentIngestRequest(file_path=file_path, document_name=document_name),
         )
@@ -170,7 +170,7 @@ async def ingest_course_document(
 async def list_course_documents(course_id: int) -> dict[str, Any]:
     """Return indexed course documents for a course."""
     try:
-        return await api.get_course_documents(course_id)
+        return await api.get_course_documents_tools(course_id)
     except HTTPException as exc:
         _raise_tool_error(exc)
 
@@ -179,7 +179,7 @@ async def list_course_documents(course_id: int) -> dict[str, Any]:
 async def search_course_context(course_id: int, query: str, limit: int = 5) -> dict[str, Any]:
     """Search the course context store for relevant chunks."""
     try:
-        return await api.search_course_context(
+        return await api.search_course_context_tools(
             course_id,
             api.CourseContextSearchRequest(query=query, limit=limit),
         )
@@ -197,7 +197,7 @@ async def discover_agents(
 ) -> dict[str, Any]:
     """Discover candidate external agents for delegation."""
     try:
-        return await api.discover_agents(
+        return await api.discover_agents_tools(
             api.DiscoverAgentsRequest(
                 capability_family=capability_family,
                 query=query,
@@ -220,7 +220,7 @@ async def plan_assignment(
 ) -> dict[str, Any]:
     """Return the pre-execution assignment plan."""
     try:
-        return await api.plan_assignment(
+        return await api.plan_assignment_tools(
             _create_request(
                 course_id=course_id,
                 assignment_id=assignment_id,
@@ -260,7 +260,7 @@ async def create_destination(
 ) -> dict[str, Any]:
     """Run the existing synchronous provisioning workflow."""
     try:
-        return await api.create_destination(
+        return await api.create_destination_tools(
             _create_request(
                 course_id=course_id,
                 assignment_id=assignment_id,
@@ -306,7 +306,7 @@ async def submit_task(
     execution_include_live_results: bool = False,
 ) -> dict[str, Any]:
     """Queue async workflow execution using the shared in-memory task store."""
-    return await api.submit_task(
+    return await api.submit_task_tools(
         _create_request(
             course_id=course_id,
             assignment_id=assignment_id,
@@ -333,7 +333,7 @@ async def submit_task(
 async def get_task_status(task_id: str) -> dict[str, Any]:
     """Return the status of a previously submitted async task."""
     try:
-        return await api.get_task(task_id)
+        return await api.get_task_tools(task_id)
     except HTTPException as exc:
         _raise_tool_error(exc)
 
@@ -342,7 +342,7 @@ async def get_task_status(task_id: str) -> dict[str, Any]:
 async def resume_task(task_id: str, step_ids: Optional[list[str]] = None, force_full_rerun: bool = False) -> dict[str, Any]:
     """Resume a task and optionally retry selected steps only."""
     try:
-        return await api.resume_task(
+        return await api.resume_task_tools(
             task_id,
             api.ResumeTaskRequest(step_ids=step_ids, force_full_rerun=force_full_rerun),
         )
@@ -354,7 +354,7 @@ async def resume_task(task_id: str, step_ids: Optional[list[str]] = None, force_
 async def inspect_task_delegation_tool(task_id: str, capability_family: str) -> dict[str, Any]:
     """Resolve the remote tool selection for a task without executing it."""
     try:
-        return await api.inspect_task_delegation_tool(
+        return await api.inspect_task_delegation_tool_tools(
             task_id,
             api.DelegationToolInspectionRequest(capability_family=capability_family),
         )
@@ -365,7 +365,7 @@ async def inspect_task_delegation_tool(task_id: str, capability_family: str) -> 
 @server.tool(description="List persisted delegation scorecards for discovered or invoked agents.")
 async def list_agent_scorecards(capability_family: Optional[str] = None) -> dict[str, Any]:
     """Return persisted agent scorecards."""
-    return await api.list_agent_scorecards(capability_family)
+    return await api.list_agent_scorecards_tools(capability_family)
 
 
 @server.tool(description="List persisted execution_step_v1 records for a submitted task.")
@@ -377,7 +377,7 @@ async def list_task_steps(
 ) -> dict[str, Any]:
     """Return task step records for a submitted async task."""
     try:
-        return await api.get_task_steps(
+        return await api.get_task_steps_tools(
             task_id,
             status=status,
             retried_only=retried_only,
@@ -391,7 +391,7 @@ async def list_task_steps(
 async def list_task_artifacts(task_id: str) -> dict[str, Any]:
     """Return task artifacts and provenance for a submitted async task."""
     try:
-        return await api.get_task_artifacts(task_id)
+        return await api.get_task_artifacts_tools(task_id)
     except HTTPException as exc:
         _raise_tool_error(exc)
 

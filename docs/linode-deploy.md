@@ -140,7 +140,12 @@ Add or adjust these in `/opt/canvas-github-agent/.env` (use your real public URL
 CANVAS_USE_MCP=false
 SERVICE_BASE_URL=http://<LINODE_PUBLIC_IP>/api
 FRONTEND_ORIGINS=http://<LINODE_PUBLIC_IP>
+# Required for per-user web sessions (generate with Python cryptography Fernet):
+CREDENTIAL_ENCRYPTION_KEY=<paste_fernet_key>
+# Behind HTTPS, optionally: SESSION_COOKIE_SECURE=true
 ```
+
+Users open the web UI and paste **their** Canvas and GitHub tokens under “Your credentials”. You can leave `CANVAS_API_TOKEN` / `GITHUB_TOKEN` unset on the server for web-only use; keep them if you still run MCP/CLI on the same host.
 
 Then restart the API so env is picked up:
 

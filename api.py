@@ -6,11 +6,19 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.agent import CanvasGitHubAgent
+from app.auth_context import (
+    USER_STORE,
+    optional_session_user_id,
+    session_auth_enabled,
+    workflow_credentials_for_env,
+    workflow_credentials_for_http,
+)
+from app.credentials import WorkflowCredentials, get_canvas_institution_url
 from app.delegation_policy import evaluate_delegation_policy
 from app.planning import generate_assignment_plan
 from app.provenance import build_artifact_provenance
@@ -24,6 +32,7 @@ from app.task_store import SQLiteTaskStore
 from scaffolding.templates import build_service_oasf_record
 from tools.canvas_tools import CanvasTools
 from tools.course_context_tools import CourseContextTools
+from app.user_store import SESSION_COOKIE_NAME, SESSION_TTL_DAYS
 
 
 logger = logging.getLogger(__name__)
@@ -190,11 +199,17 @@ def build_capabilities_payload() -> dict[str, Any]:
             },
         ],
         "authentication": {
-            "service": "none",
+            "service": "session_cookie_optional",
+            "description": (
+                "When CREDENTIAL_ENCRYPTION_KEY is set, the web UI uses POST /auth/session "
+                "with per-user Canvas and GitHub tokens (httpOnly cookie). "
+                "Otherwise the API uses CANVAS_API_TOKEN and GITHUB_TOKEN from the environment. "
+                "MCP tools always use environment credentials."
+            ),
             "upstream_dependencies": [
-                "CANVAS_API_TOKEN",
-                "GITHUB_TOKEN for coding assignment flow",
-                "NOTION_TOKEN for writing assignment flow",
+                "CANVAS_API_TOKEN or browser session token",
+                "GITHUB_TOKEN or browser session token for coding flow",
+                "NOTION_TOKEN for writing flow (server env)",
             ],
         },
         "transports": {
@@ -350,6 +365,37 @@ def _request_payload(req: "CreateRequest") -> dict[str, Any]:
     }
 
 
+def _canvas_tools_from_credentials(creds: WorkflowCredentials) -> CanvasTools:
+    use_mcp = False if session_auth_enabled() else None
+    return CanvasTools(canvas_url=creds.canvas_url, canvas_token=creds.canvas_token, use_mcp=use_mcp)
+
+
+def _assert_task_visible(task: dict[str, Any], request: Optional[Request]) -> None:
+    if not session_auth_enabled() or request is None:
+        return
+    uid = optional_session_user_id(request)
+    if uid is None:
+        raise HTTPException(status_code=401, detail="Not authenticated.")
+    owner = task.get("owner_user_id")
+    if owner is not None and int(owner) != int(uid):
+        raise HTTPException(status_code=404, detail="Task not found.")
+
+
+def _credentials_for_task_owner(owner_user_id: Optional[int]) -> Optional[WorkflowCredentials]:
+    if owner_user_id is None:
+        return None
+    canvas_tok, github_tok, github_user = USER_STORE.decrypt_workflow_tokens(int(owner_user_id))
+    _org = os.getenv("GITHUB_ORG", "").strip()
+    github_org = _org if _org and not _org.startswith("#") else ""
+    return WorkflowCredentials(
+        canvas_url=get_canvas_institution_url(),
+        canvas_token=canvas_tok,
+        github_token=github_tok,
+        github_username=github_user,
+        github_org=github_org,
+    ).with_notion_from_env()
+
+
 def _build_task_response(req: "CreateRequest", result: dict[str, Any]) -> dict[str, Any]:
     """Normalize workflow output into a stable task-result contract."""
     destination = result.get("destination")
@@ -418,8 +464,9 @@ def _build_task_status(
     failed_at: Optional[str] = None,
     result: Optional[dict[str, Any]] = None,
     error: Optional[dict[str, str]] = None,
+    owner_user_id: Optional[int] = None,
 ) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "task_id": task_id,
         "status": status,
         "service": {
@@ -435,6 +482,9 @@ def _build_task_status(
         "result": result,
         "error": error,
     }
+    if owner_user_id is not None:
+        payload["owner_user_id"] = owner_user_id
+    return payload
 
 
 def _build_plan_response(req: "CreateRequest", plan_result: dict[str, Any]) -> dict[str, Any]:
@@ -1282,7 +1332,9 @@ async def _execute_task(task_id: str, req: "CreateRequest") -> None:
                 },
             ),
         )
-        agent = CanvasGitHubAgent()
+        owner_id = task.get("owner_user_id")
+        task_creds = _credentials_for_task_owner(owner_id) if owner_id is not None else None
+        agent = CanvasGitHubAgent(credentials=task_creds) if task_creds else CanvasGitHubAgent()
         result = await agent.run(
             course_id=req.course_id,
             assignment_id=req.assignment_id,
@@ -1383,6 +1435,7 @@ app = FastAPI(title="Canvas Assignment Agent API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_allowed_origins(),
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -1435,6 +1488,78 @@ class DelegationToolInspectionRequest(BaseModel):
     capability_family: str
 
 
+class ConnectTokensBody(BaseModel):
+    canvas_token: str
+    github_token: str
+    github_username: str
+
+
+@app.post("/auth/session")
+async def auth_create_or_update_session(body: ConnectTokensBody, request: Request, response: Response):
+    """Store encrypted Canvas and GitHub tokens; set session cookie."""
+    if not session_auth_enabled():
+        raise HTTPException(
+            status_code=501,
+            detail="Per-user sessions are not configured. Set CREDENTIAL_ENCRYPTION_KEY (Fernet key).",
+        )
+    if not (body.canvas_token or "").strip() or not (body.github_token or "").strip():
+        raise HTTPException(status_code=400, detail="canvas_token and github_token are required.")
+    if not (body.github_username or "").strip():
+        raise HTTPException(status_code=400, detail="github_username is required.")
+    raw_existing = request.cookies.get(SESSION_COOKIE_NAME)
+    if raw_existing and USER_STORE.validate_session(raw_existing) is not None:
+        USER_STORE.update_credentials_for_session(
+            raw_existing,
+            canvas_token=body.canvas_token.strip(),
+            github_token=body.github_token.strip(),
+            github_username=body.github_username.strip(),
+        )
+        return {"status": "ok", "updated": True}
+    raw_token, user_id = USER_STORE.create_session_with_credentials(
+        canvas_token=body.canvas_token.strip(),
+        github_token=body.github_token.strip(),
+        github_username=body.github_username.strip(),
+    )
+    secure = os.getenv("SESSION_COOKIE_SECURE", "").strip().lower() in {"1", "true", "yes"}
+    max_age = max(SESSION_TTL_DAYS, 1) * 86400
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=raw_token,
+        httponly=True,
+        samesite="lax",
+        max_age=max_age,
+        secure=secure,
+        path="/",
+    )
+    return {"status": "ok", "updated": False, "user_id": user_id}
+
+
+@app.get("/auth/status")
+async def auth_status(request: Request):
+    """Report whether session-based auth is enabled and whether this browser has a session."""
+    if not session_auth_enabled():
+        return {
+            "session_auth_enabled": False,
+            "authenticated": False,
+            "canvas_institution_url": get_canvas_institution_url(),
+        }
+    uid = optional_session_user_id(request)
+    return {
+        "session_auth_enabled": True,
+        "authenticated": uid is not None,
+        "canvas_institution_url": get_canvas_institution_url(),
+    }
+
+
+@app.delete("/auth/session")
+async def auth_delete_session(request: Request, response: Response):
+    """Clear session cookie and remove server-side session row."""
+    raw = request.cookies.get(SESSION_COOKIE_NAME)
+    USER_STORE.delete_session(raw)
+    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    return {"status": "ok"}
+
+
 @app.get("/health")
 async def get_health():
     """Return a minimal service health payload."""
@@ -1451,9 +1576,7 @@ async def get_capabilities():
     return build_capabilities_payload()
 
 
-@app.post("/discover-agents")
-async def discover_agents(req: DiscoverAgentsRequest):
-    """Return ranked candidate agents for the requested capability family or search query."""
+async def _discover_agents_body(req: DiscoverAgentsRequest) -> dict[str, Any]:
     try:
         candidates = await asyncio.to_thread(
             AGENT_REGISTRY.discover_agents,
@@ -1473,9 +1596,15 @@ async def discover_agents(req: DiscoverAgentsRequest):
         raise HTTPException(status_code=500, detail="Failed to discover agents.")
 
 
-@app.post("/plan")
-async def plan_assignment(req: CreateRequest):
-    """Analyze an assignment and return a structured execution plan."""
+@app.post("/discover-agents")
+async def discover_agents(req: DiscoverAgentsRequest, request: Request):
+    """Return ranked candidate agents for the requested capability family or search query."""
+    if session_auth_enabled():
+        workflow_credentials_for_http(request)
+    return await _discover_agents_body(req)
+
+
+async def _plan_assignment_body(req: CreateRequest, creds: WorkflowCredentials) -> dict[str, Any]:
     try:
         plan_result = await generate_assignment_plan(
             course_id=req.course_id,
@@ -1484,6 +1613,7 @@ async def plan_assignment(req: CreateRequest):
             assignment_type=req.assignment_type,
             notion_content_mode=req.notion_content_mode,
             agent_factory=CanvasGitHubAgent,
+            credentials=creds,
         )
         plan_result["plan"]["delegation_candidates"] = AGENT_REGISTRY.enrich_capability_groups(
             plan_result["plan"]["delegation_candidates"],
@@ -1507,32 +1637,53 @@ async def plan_assignment(req: CreateRequest):
         raise HTTPException(status_code=500, detail="Failed to plan assignment.")
 
 
-@app.post("/tasks", status_code=202)
-async def submit_task(req: CreateRequest):
-    """Queue assignment destination creation for asynchronous execution."""
+@app.post("/plan")
+async def plan_assignment(req: CreateRequest, request: Request):
+    """Analyze an assignment and return a structured execution plan."""
+    creds = workflow_credentials_for_http(request)
+    return await _plan_assignment_body(req, creds)
+
+
+async def _enqueue_task(req: CreateRequest, owner_user_id: Optional[int]) -> dict[str, Any]:
     task_id = str(uuid4())
     TASK_STORE[task_id] = _build_task_status(
         task_id=task_id,
         request=_request_payload(req),
         status="queued",
         submitted_at=_utcnow_iso(),
+        owner_user_id=owner_user_id,
     )
     _schedule_task_execution(task_id, req)
     return TASK_STORE[task_id]
 
 
-@app.get("/tasks/{task_id}")
-async def get_task(task_id: str):
-    """Return the status of a previously submitted task."""
+@app.post("/tasks", status_code=202)
+async def submit_task(req: CreateRequest, request: Request):
+    """Queue assignment destination creation for asynchronous execution."""
+    if session_auth_enabled() and optional_session_user_id(request) is None:
+        raise HTTPException(status_code=401, detail="Not authenticated.")
+    owner_user_id = optional_session_user_id(request) if session_auth_enabled() else None
+    return await _enqueue_task(req, owner_user_id)
+
+
+async def _get_task_payload(task_id: str, request: Optional[Request]) -> dict[str, Any]:
     task = TASK_STORE.get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found.")
+    _assert_task_visible(task, request)
     return task
+
+
+@app.get("/tasks/{task_id}")
+async def get_task(task_id: str, request: Request):
+    """Return the status of a previously submitted task."""
+    return await _get_task_payload(task_id, request)
 
 
 @app.get("/tasks/{task_id}/steps")
 async def get_task_steps(
     task_id: str,
+    request: Request,
     status: Optional[str] = None,
     retried_only: bool = False,
     delegated_only: bool = False,
@@ -1541,6 +1692,7 @@ async def get_task_steps(
     task = TASK_STORE.get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found.")
+    _assert_task_visible(task, request)
     steps = TASK_STORE.list_steps(task_id)
     if status:
         statuses = {item.strip().lower() for item in status.split(",") if item.strip()}
@@ -1561,11 +1713,12 @@ async def get_task_steps(
 
 
 @app.get("/tasks/{task_id}/artifacts")
-async def get_task_artifacts(task_id: str):
+async def get_task_artifacts(task_id: str, request: Request):
     """Return generated artifacts and provenance for a task."""
     task = TASK_STORE.get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found.")
+    _assert_task_visible(task, request)
 
     result = task.get("result") or {}
     return {
@@ -1577,11 +1730,12 @@ async def get_task_artifacts(task_id: str):
 
 
 @app.post("/tasks/{task_id}/resume", status_code=202)
-async def resume_task(task_id: str, req: ResumeTaskRequest):
+async def resume_task(task_id: str, req: ResumeTaskRequest, request: Request):
     """Resume a task, optionally retrying only selected failed or blocked steps."""
     task = TASK_STORE.get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found.")
+    _assert_task_visible(task, request)
     if task.get("status") in {"queued", "running"}:
         raise HTTPException(status_code=409, detail="Task is already queued or running.")
 
@@ -1601,11 +1755,12 @@ async def resume_task(task_id: str, req: ResumeTaskRequest):
 
 
 @app.post("/tasks/{task_id}/inspect-delegation-tool")
-async def inspect_task_delegation_tool(task_id: str, req: DelegationToolInspectionRequest):
+async def inspect_task_delegation_tool(task_id: str, req: DelegationToolInspectionRequest, request: Request):
     """Resolve the remote tool and schema that would be used for a delegated step."""
     task = TASK_STORE.get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found.")
+    _assert_task_visible(task, request)
     create_request = _create_request_from_payload(task.get("request") or {})
     try:
         return await _inspect_task_delegation_tool(task_id, create_request, req.capability_family)
@@ -1621,18 +1776,18 @@ async def inspect_task_delegation_tool(task_id: str, req: DelegationToolInspecti
 
 
 @app.get("/agents/scorecards")
-async def list_agent_scorecards(capability_family: Optional[str] = None):
+async def list_agent_scorecards(request: Request, capability_family: Optional[str] = None):
     """Return persisted delegation scorecards for known remote agents."""
+    if session_auth_enabled():
+        workflow_credentials_for_http(request)
     return {
         "scorecards": TASK_STORE.list_agent_scorecards(capability_family),
     }
 
 
-@app.get("/courses")
-async def get_courses():
-    """Return all Canvas courses for the authenticated user."""
+async def _get_courses_core(creds: WorkflowCredentials) -> dict[str, Any]:
     try:
-        canvas = CanvasTools()
+        canvas = _canvas_tools_from_credentials(creds)
         courses = await canvas.list_courses()
         return {"courses": courses}
     except HTTPException:
@@ -1642,11 +1797,15 @@ async def get_courses():
         raise HTTPException(status_code=500, detail="Failed to fetch courses.")
 
 
-@app.get("/courses/{course_id}/assignments")
-async def get_assignments(course_id: int):
-    """Return all assignments for a given course."""
+@app.get("/courses")
+async def get_courses(request: Request):
+    """Return all Canvas courses for the authenticated user."""
+    return await _get_courses_core(workflow_credentials_for_http(request))
+
+
+async def _get_assignments_core(course_id: int, creds: WorkflowCredentials) -> dict[str, Any]:
     try:
-        canvas = CanvasTools()
+        canvas = _canvas_tools_from_credentials(creds)
         assignments = await canvas.get_course_assignments(course_id)
         return {"assignments": assignments}
     except HTTPException:
@@ -1656,11 +1815,15 @@ async def get_assignments(course_id: int):
         raise HTTPException(status_code=500, detail="Failed to fetch assignments.")
 
 
-@app.get("/courses/{course_id}/modules")
-async def get_modules(course_id: int):
-    """Return Canvas modules for a given course."""
+@app.get("/courses/{course_id}/assignments")
+async def get_assignments(course_id: int, request: Request):
+    """Return all assignments for a given course."""
+    return await _get_assignments_core(course_id, workflow_credentials_for_http(request))
+
+
+async def _get_modules_core(course_id: int, creds: WorkflowCredentials) -> dict[str, Any]:
     try:
-        canvas = CanvasTools()
+        canvas = _canvas_tools_from_credentials(creds)
         modules = await canvas.get_course_modules(course_id)
         return {"modules": modules}
     except HTTPException:
@@ -1670,11 +1833,17 @@ async def get_modules(course_id: int):
         raise HTTPException(status_code=500, detail="Failed to fetch modules.")
 
 
-@app.post("/courses/{course_id}/modules/search")
-async def search_course_modules(course_id: int, req: CourseContextSearchRequest):
-    """Search Canvas course modules for assignment-relevant context."""
+@app.get("/courses/{course_id}/modules")
+async def get_modules(course_id: int, request: Request):
+    """Return Canvas modules for a given course."""
+    return await _get_modules_core(course_id, workflow_credentials_for_http(request))
+
+
+async def _search_course_modules_core(
+    course_id: int, req: CourseContextSearchRequest, creds: WorkflowCredentials
+) -> dict[str, Any]:
     try:
-        canvas = CanvasTools()
+        canvas = _canvas_tools_from_credentials(creds)
         results = await canvas.search_course_module_context(course_id, req.query, req.limit)
         return {
             "course_id": course_id,
@@ -1689,9 +1858,17 @@ async def search_course_modules(course_id: int, req: CourseContextSearchRequest)
         raise HTTPException(status_code=500, detail="Failed to search course modules.")
 
 
+@app.post("/courses/{course_id}/modules/search")
+async def search_course_modules(course_id: int, req: CourseContextSearchRequest, request: Request):
+    """Search Canvas course modules for assignment-relevant context."""
+    return await _search_course_modules_core(course_id, req, workflow_credentials_for_http(request))
+
+
 @app.post("/courses/{course_id}/documents/ingest")
-async def ingest_course_document(course_id: int, req: CourseDocumentIngestRequest):
+async def ingest_course_document(course_id: int, req: CourseDocumentIngestRequest, request: Request):
     """Parse a local course PDF and index it into Chroma."""
+    if session_auth_enabled():
+        workflow_credentials_for_http(request)
     try:
         tools = CourseContextTools()
         return await asyncio.to_thread(tools.ingest_pdf, course_id, req.file_path, req.document_name)
@@ -1707,8 +1884,10 @@ async def ingest_course_document(course_id: int, req: CourseDocumentIngestReques
 
 
 @app.get("/courses/{course_id}/documents")
-async def get_course_documents(course_id: int):
+async def get_course_documents(course_id: int, request: Request):
     """List course documents currently indexed for retrieval."""
+    if session_auth_enabled():
+        workflow_credentials_for_http(request)
     try:
         tools = CourseContextTools()
         documents = await asyncio.to_thread(tools.list_documents, course_id)
@@ -1723,8 +1902,10 @@ async def get_course_documents(course_id: int):
 
 
 @app.post("/courses/{course_id}/context/search")
-async def search_course_context(course_id: int, req: CourseContextSearchRequest):
+async def search_course_context(course_id: int, req: CourseContextSearchRequest, request: Request):
     """Search the Chroma-backed course context store for a course."""
+    if session_auth_enabled():
+        workflow_credentials_for_http(request)
     try:
         tools = CourseContextTools()
         results = await asyncio.to_thread(tools.search_context, course_id, req.query, req.limit)
@@ -1753,11 +1934,9 @@ async def get_oasf_record():
         raise HTTPException(status_code=500, detail="Failed to build OASF record.")
 
 
-@app.post("/create")
-async def create_destination(req: CreateRequest):
-    """Synchronously create the destination for a Canvas assignment."""
+async def _create_destination_core(req: CreateRequest, creds: WorkflowCredentials) -> dict[str, Any]:
     try:
-        agent = CanvasGitHubAgent()
+        agent = CanvasGitHubAgent(credentials=creds)
         result = await agent.run(
             course_id=req.course_id,
             assignment_id=req.assignment_id,
@@ -1779,3 +1958,185 @@ async def create_destination(req: CreateRequest):
             req.assignment_id,
         )
         raise HTTPException(status_code=500, detail="Failed to create destination.")
+
+
+@app.post("/create")
+async def create_destination(req: CreateRequest, request: Request):
+    """Synchronously create the destination for a Canvas assignment."""
+    creds = workflow_credentials_for_http(request)
+    return await _create_destination_core(req, creds)
+
+
+# --- MCP / programmatic entrypoints (process environment credentials only) ---
+
+
+async def get_courses_tools() -> dict[str, Any]:
+    return await _get_courses_core(workflow_credentials_for_env())
+
+
+async def get_assignments_tools(course_id: int) -> dict[str, Any]:
+    return await _get_assignments_core(course_id, workflow_credentials_for_env())
+
+
+async def get_modules_tools(course_id: int) -> dict[str, Any]:
+    return await _get_modules_core(course_id, workflow_credentials_for_env())
+
+
+async def search_course_modules_tools(course_id: int, req: CourseContextSearchRequest) -> dict[str, Any]:
+    return await _search_course_modules_core(course_id, req, workflow_credentials_for_env())
+
+
+async def discover_agents_tools(req: DiscoverAgentsRequest) -> dict[str, Any]:
+    return await _discover_agents_body(req)
+
+
+async def plan_assignment_tools(req: CreateRequest) -> dict[str, Any]:
+    return await _plan_assignment_body(req, workflow_credentials_for_env())
+
+
+async def create_destination_tools(req: CreateRequest) -> dict[str, Any]:
+    return await _create_destination_core(req, workflow_credentials_for_env())
+
+
+async def submit_task_tools(req: CreateRequest) -> dict[str, Any]:
+    return await _enqueue_task(req, None)
+
+
+async def get_task_tools(task_id: str) -> dict[str, Any]:
+    return await _get_task_payload(task_id, None)
+
+
+async def get_task_steps_tools(
+    task_id: str,
+    status: Optional[str] = None,
+    retried_only: bool = False,
+    delegated_only: bool = False,
+) -> dict[str, Any]:
+    task = TASK_STORE.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    _assert_task_visible(task, None)
+    steps = TASK_STORE.list_steps(task_id)
+    if status:
+        statuses = {item.strip().lower() for item in status.split(",") if item.strip()}
+        steps = [step for step in steps if str(step.get("status") or "").lower() in statuses]
+    if retried_only:
+        steps = [step for step in steps if int(step.get("retry_count") or 0) > 0]
+    if delegated_only:
+        steps = [step for step in steps if step.get("mode") == "delegated"]
+    return {
+        "task_id": task_id,
+        "filters": {
+            "status": status,
+            "retried_only": retried_only,
+            "delegated_only": delegated_only,
+        },
+        "steps": steps,
+    }
+
+
+async def get_task_artifacts_tools(task_id: str) -> dict[str, Any]:
+    task = TASK_STORE.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    _assert_task_visible(task, None)
+    result = task.get("result") or {}
+    return {
+        "task_id": task_id,
+        "status": task.get("status"),
+        "artifacts": result.get("artifacts", []),
+        "provenance": result.get("details", {}).get("artifact_provenance", []),
+    }
+
+
+async def resume_task_tools(task_id: str, req: ResumeTaskRequest) -> dict[str, Any]:
+    task = TASK_STORE.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    _assert_task_visible(task, None)
+    if task.get("status") in {"queued", "running"}:
+        raise HTTPException(status_code=409, detail="Task is already queued or running.")
+    step_ids = _resolve_resume_step_ids(task_id, req.step_ids)
+    create_request = _create_request_from_payload(task.get("request") or {})
+    full_rerun = req.force_full_rerun or not task.get("result") or "generate_primary_artifacts" in step_ids or task.get("status") == "failed"
+    task["status"] = "queued"
+    task["error"] = None
+    if full_rerun:
+        task["result"] = None
+        task["completed_at"] = None
+    TASK_STORE[task_id] = task
+    _schedule_task_resume(task_id, create_request, step_ids, force_full_rerun=full_rerun)
+    return TASK_STORE[task_id]
+
+
+async def inspect_task_delegation_tool_tools(task_id: str, req: DelegationToolInspectionRequest) -> dict[str, Any]:
+    task = TASK_STORE.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    _assert_task_visible(task, None)
+    create_request = _create_request_from_payload(task.get("request") or {})
+    try:
+        return await _inspect_task_delegation_tool(task_id, create_request, req.capability_family)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception(
+            "Failed to inspect delegation tool for task_id=%s capability_family=%s",
+            task_id,
+            req.capability_family,
+        )
+        raise HTTPException(status_code=500, detail="Failed to inspect delegation tool.")
+
+
+async def list_agent_scorecards_tools(capability_family: Optional[str] = None) -> dict[str, Any]:
+    return {
+        "scorecards": TASK_STORE.list_agent_scorecards(capability_family),
+    }
+
+
+async def ingest_course_document_tools(course_id: int, req: CourseDocumentIngestRequest) -> Any:
+    try:
+        tools = CourseContextTools()
+        return await asyncio.to_thread(tools.ingest_pdf, course_id, req.file_path, req.document_name)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Course document not found.")
+    except (RuntimeError, ValueError) as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to ingest course document for course_id=%s", course_id)
+        raise HTTPException(status_code=500, detail="Failed to ingest course document.")
+
+
+async def get_course_documents_tools(course_id: int) -> dict[str, Any]:
+    try:
+        tools = CourseContextTools()
+        documents = await asyncio.to_thread(tools.list_documents, course_id)
+        return {"documents": documents}
+    except RuntimeError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to list course documents for course_id=%s", course_id)
+        raise HTTPException(status_code=500, detail="Failed to list course documents.")
+
+
+async def search_course_context_tools(course_id: int, req: CourseContextSearchRequest) -> dict[str, Any]:
+    try:
+        tools = CourseContextTools()
+        results = await asyncio.to_thread(tools.search_context, course_id, req.query, req.limit)
+        return {
+            "course_id": course_id,
+            "query": req.query,
+            "limit": req.limit,
+            "results": results,
+        }
+    except RuntimeError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to search course context for course_id=%s", course_id)
+        raise HTTPException(status_code=500, detail="Failed to search course context.")

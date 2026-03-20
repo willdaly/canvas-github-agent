@@ -11,11 +11,20 @@ from contextlib import asynccontextmanager
 
 class GitHubTools:
     """Tools for interacting with GitHub via MCP."""
-    
-    def __init__(self):
-        self.github_token = os.getenv("GITHUB_TOKEN")
-        self.github_username = os.getenv("GITHUB_USERNAME")
-        _org = os.getenv("GITHUB_ORG", "").strip()
+
+    def __init__(
+        self,
+        *,
+        github_token: Optional[str] = None,
+        github_username: Optional[str] = None,
+        github_org: Optional[str] = None,
+    ):
+        self.github_token = (github_token if github_token is not None else os.getenv("GITHUB_TOKEN")) or ""
+        self.github_username = (github_username if github_username is not None else os.getenv("GITHUB_USERNAME")) or ""
+        if github_org is not None:
+            _org = github_org.strip()
+        else:
+            _org = os.getenv("GITHUB_ORG", "").strip()
         self.github_org = _org if _org and not _org.startswith("#") else ""
         
     @asynccontextmanager

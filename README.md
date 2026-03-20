@@ -63,6 +63,8 @@ Set values in .env:
 
 Notes:
 
+- **Multi-user web UI:** set `CREDENTIAL_ENCRYPTION_KEY` to a Fernet key (see `.env.example`). Users paste Northeastern Canvas and GitHub tokens in the UI; tokens are encrypted at rest in SQLite (`.data/users.sqlite3` by default). The MCP server and CLI continue to use `CANVAS_API_TOKEN` / `GITHUB_TOKEN` from the environment. Writing assignments still use server `NOTION_TOKEN` / `NOTION_PARENT_PAGE_ID` unless you extend the model.
+- `CANVAS_INSTITUTION_URL` defaults to Northeastern Canvas; the UI does not ask for an institution URL.
 - CANVAS_USE_MCP=true uses the Smithery-hosted Canvas MCP server.
 - CANVAS_USE_MCP=false uses direct Canvas REST calls and is recommended for headless server deployments.
 - CANVAS_MODULE_CACHE_TTL_SECONDS controls lightweight in-process caching for Canvas module lookups to reduce repeated API requests.

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Optional, Sequence
 
 from app.agent import CanvasGitHubAgent
+from app.credentials import WorkflowCredentials
 
 
 def _assignment_text(assignment: dict[str, Any]) -> str:
@@ -198,9 +199,10 @@ async def generate_assignment_plan(
     assignment_type: Optional[str],
     notion_content_mode: Optional[str],
     agent_factory: type[CanvasGitHubAgent] = CanvasGitHubAgent,
+    credentials: Optional[WorkflowCredentials] = None,
 ) -> dict[str, Any]:
     """Build a structured execution plan for the selected assignment."""
-    agent = agent_factory()
+    agent = agent_factory(credentials=credentials)
     assignment = await agent.fetch_assignment(course_id, assignment_id)
     course_context = await agent.fetch_course_context(course_id, assignment)
     resolved_assignment_type = assignment_type or agent.infer_assignment_type(assignment)

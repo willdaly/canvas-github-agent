@@ -5,6 +5,7 @@ description = "Canvas assignment workflow orchestrator for GitHub and Notion des
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "cryptography>=42.0.0",
     "chromadb>=1.0.0",
     "docling>=2.0.0",
     "mcp>=0.9.0",

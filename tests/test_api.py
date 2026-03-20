@@ -13,6 +13,9 @@ async def _request(method, url, payload=None):
 
 
 class StubCanvasTools:
+    def __init__(self, **kwargs):
+        pass
+
     async def list_courses(self):
         return [{"id": 1, "name": "Course One"}]
 
@@ -38,6 +41,9 @@ class StubCanvasTools:
 
 
 class StubAgentSuccess:
+    def __init__(self, credentials=None, **kwargs):
+        pass
+
     async def run(self, **kwargs):
         return {
             "destination": "github",
@@ -77,6 +83,9 @@ class StubAgentSuccess:
 
 
 class StubWritingAgentSuccess:
+    def __init__(self, credentials=None, **kwargs):
+        pass
+
     async def run(self, **kwargs):
         return {
             "destination": "notion",
@@ -92,6 +101,9 @@ class StubWritingAgentSuccess:
 
 
 class StubAgentNone:
+    def __init__(self, credentials=None, **kwargs):
+        pass
+
     async def run(self, **kwargs):
         return None
 
@@ -100,6 +112,9 @@ class StubAgentNone:
 
 
 class StubCanvasToolsError:
+    def __init__(self, **kwargs):
+        pass
+
     async def list_courses(self):
         raise RuntimeError("sensitive canvas token leak")
 
@@ -114,6 +129,9 @@ class StubCanvasToolsError:
 
 
 class StubAgentError:
+    def __init__(self, credentials=None, **kwargs):
+        pass
+
     async def run(self, **kwargs):
         raise RuntimeError("sensitive github failure")
 

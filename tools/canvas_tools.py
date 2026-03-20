@@ -28,12 +28,21 @@ class CanvasTools:
         "unlock_at",
     )
     
-    def __init__(self):
-        self.canvas_url = os.getenv("CANVAS_API_URL", "https://canvas.instructure.com")
-        self.canvas_token = os.getenv("CANVAS_API_TOKEN")
-        self.use_mcp = os.getenv("CANVAS_USE_MCP", "true").strip().lower() in {
-            "1", "true", "yes", "on"
-        }
+    def __init__(
+        self,
+        *,
+        canvas_url: Optional[str] = None,
+        canvas_token: Optional[str] = None,
+        use_mcp: Optional[bool] = None,
+    ):
+        self.canvas_url = (canvas_url or os.getenv("CANVAS_API_URL") or "https://canvas.instructure.com").strip().rstrip("/")
+        self.canvas_token = (canvas_token if canvas_token is not None else os.getenv("CANVAS_API_TOKEN")) or ""
+        if use_mcp is None:
+            self.use_mcp = os.getenv("CANVAS_USE_MCP", "true").strip().lower() in {
+                "1", "true", "yes", "on"
+            }
+        else:
+            self.use_mcp = use_mcp
         self.module_cache_ttl_seconds = max(
             int(os.getenv("CANVAS_MODULE_CACHE_TTL_SECONDS", "300") or "300"),
             0,

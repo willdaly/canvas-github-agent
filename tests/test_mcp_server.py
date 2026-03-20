@@ -22,6 +22,9 @@ def _decode_resource_payload(result):
 
 
 class StubCanvasTools:
+    def __init__(self, **kwargs):
+        pass
+
     async def list_courses(self):
         return [{"id": 1, "name": "Course One"}]
 
@@ -45,6 +48,9 @@ class StubCanvasTools:
 
 
 class StubAgentSuccess:
+    def __init__(self, credentials=None, **kwargs):
+        pass
+
     async def run(self, **kwargs):
         return {
             "destination": "github",

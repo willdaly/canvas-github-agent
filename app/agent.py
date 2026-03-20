@@ -9,6 +9,7 @@ from typing import Any, Optional, Sequence
 from dateutil import parser as dateutil_parser
 from dotenv import load_dotenv
 
+from app.credentials import WorkflowCredentials
 from scaffolding.templates import generate_starter_files, html_to_markdown, normalize_slug
 from tools.canvas_tools import CanvasTools
 from tools.course_context_tools import CourseContextTools
@@ -81,14 +82,35 @@ def get_missing_notion_config(env: Optional[dict] = None) -> list[str]:
 class CanvasGitHubAgent:
     """Workflow orchestrator for Canvas assignments to GitHub/Notion destinations."""
 
-    def __init__(self):
-        self.canvas_tools = CanvasTools()
-        self.course_context_tools = CourseContextTools()
-        self.github_tools = GitHubTools()
-        self.notion_tools = NotionTools()
-        self.github_username = os.getenv("GITHUB_USERNAME")
-        _org = os.getenv("GITHUB_ORG", "").strip()
-        self.github_org = _org if _org and not _org.startswith("#") else ""
+    def __init__(self, credentials: Optional[WorkflowCredentials] = None):
+        if credentials is not None:
+            creds = credentials.with_notion_from_env()
+            self.canvas_tools = CanvasTools(
+                canvas_url=creds.canvas_url,
+                canvas_token=creds.canvas_token,
+                use_mcp=False,
+            )
+            self.course_context_tools = CourseContextTools()
+            self.github_tools = GitHubTools(
+                github_token=creds.github_token,
+                github_username=creds.github_username,
+                github_org=creds.github_org or None,
+            )
+            self.notion_tools = NotionTools(
+                notion_token=creds.notion_token,
+                parent_page_id=creds.notion_parent_page_id,
+            )
+            self.github_username = creds.github_username or None
+            _org = (creds.github_org or "").strip()
+            self.github_org = _org if _org and not _org.startswith("#") else ""
+        else:
+            self.canvas_tools = CanvasTools()
+            self.course_context_tools = CourseContextTools()
+            self.github_tools = GitHubTools()
+            self.notion_tools = NotionTools()
+            self.github_username = os.getenv("GITHUB_USERNAME")
+            _org = os.getenv("GITHUB_ORG", "").strip()
+            self.github_org = _org if _org and not _org.startswith("#") else ""
 
     @staticmethod
     def format_course_context(course_context: Sequence[dict], max_items: int = 3) -> str:
@@ -133,8 +155,13 @@ class CanvasGitHubAgent:
             print("❌ Please enter 'c', 'w', 'coding', 'writing', or press Enter.")
 
     def validate_notion_config(self) -> list[str]:
-        """Return missing Notion environment variables required for writing flow."""
-        return get_missing_notion_config()
+        """Return missing Notion configuration required for writing flow."""
+        missing = []
+        if not (self.notion_tools.notion_token or "").strip():
+            missing.append("NOTION_TOKEN")
+        if not (self.notion_tools.parent_page_id or "").strip():
+            missing.append("NOTION_PARENT_PAGE_ID")
+        return missing
 
     @staticmethod
     def build_context_query(assignment: dict) -> str:

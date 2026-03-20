@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const API =
   import.meta.env.VITE_API_URL ||
   `${window.location.protocol}//${window.location.hostname}:8000`;
+
+const withCreds = { credentials: "include" };
 
 export default function App() {
   const [courses, setCourses] = useState([]);
@@ -16,6 +18,27 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
+
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authStatus, setAuthStatus] = useState(null);
+  const [canvasToken, setCanvasToken] = useState("");
+  const [githubToken, setGithubToken] = useState("");
+  const [githubUsername, setGithubUsername] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API}/auth/status`, withCreds);
+        const data = await res.json().catch(() => ({}));
+        setAuthStatus(data);
+      } catch {
+        setAuthStatus({ session_auth_enabled: false, authenticated: false });
+      } finally {
+        setAuthChecked(true);
+      }
+    })();
+  }, []);
 
   async function parseResponse(res) {
     const contentType = res.headers.get("content-type") || "";
@@ -32,10 +55,54 @@ export default function App() {
     return fallback;
   }
 
+  const sessionAuth = Boolean(authStatus?.session_auth_enabled);
+  const authenticated = Boolean(authStatus?.authenticated);
+  const mainUnlocked = !sessionAuth || authenticated;
+
+  async function connectCredentials(e) {
+    e.preventDefault();
+    setAuthBusy(true);
+    setError("");
+    try {
+      const res = await fetch(`${API}/auth/session`, {
+        ...withCreds,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          canvas_token: canvasToken.trim(),
+          github_token: githubToken.trim(),
+          github_username: githubUsername.trim(),
+        }),
+      });
+      const data = await parseResponse(res);
+      if (!res.ok) throw new Error(getErrorDetail(data, "Could not save credentials."));
+      setCanvasToken("");
+      setGithubToken("");
+      const st = await fetch(`${API}/auth/status`, withCreds).then((r) => r.json());
+      setAuthStatus(st);
+    } catch (err) {
+      setError(`❌ ${err.message || "Connect failed"}`);
+    }
+    setAuthBusy(false);
+  }
+
+  async function logout() {
+    setError("");
+    try {
+      await fetch(`${API}/auth/session`, { ...withCreds, method: "DELETE" });
+    } catch { /* ignore */ }
+    setAuthStatus((s) => ({ ...(s || {}), authenticated: false }));
+    setCourses([]);
+    setAssignments([]);
+    setSelectedCourse(null);
+    setSelectedAssignment(null);
+    setResult(null);
+  }
+
   async function fetchCourses() {
     setLoading("courses"); setError(""); setCourses([]); setAssignments([]); setResult(null);
     try {
-      const res = await fetch(`${API}/courses`);
+      const res = await fetch(`${API}/courses`, withCreds);
       const data = await parseResponse(res);
       if (!res.ok) {
         throw new Error(getErrorDetail(data, "Failed to fetch courses."));
@@ -52,7 +119,7 @@ export default function App() {
     setAssignmentFilter("all");
     setLoading("assignments"); setError("");
     try {
-      const res = await fetch(`${API}/courses/${courseId}/assignments`);
+      const res = await fetch(`${API}/courses/${courseId}/assignments`, withCreds);
       const data = await parseResponse(res);
       if (!res.ok) {
         throw new Error(getErrorDetail(data, "Failed to fetch assignments."));
@@ -85,7 +152,6 @@ export default function App() {
     return true;
   });
 
-  /** API returns task_result_v1: destination lives under route; links are in artifacts. */
   const createOutcome = result
     ? {
         destination: result.route?.destination ?? result.destination,
@@ -106,6 +172,7 @@ export default function App() {
 
     try {
       const res = await fetch(`${API}/create`, {
+        ...withCreds,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -124,22 +191,77 @@ export default function App() {
   }
 
   const btn = "px-4 py-2 rounded-lg font-medium text-sm transition-all";
+  const inputStyle = {
+    width: "100%",
+    boxSizing: "border-box",
+    background: "#0f172a",
+    border: "1px solid #334155",
+    color: "#e2e8f0",
+    padding: "10px 12px",
+    borderRadius: 8,
+    fontSize: 14,
+    marginTop: 4,
+  };
+
+  if (!authChecked) {
+    return (
+      <div style={{ fontFamily: "Inter, sans-serif", background: "#0f172a", minHeight: "100vh", color: "#94a3b8", padding: "2rem" }}>
+        <p>Loading…</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ fontFamily: "Inter, sans-serif", background: "#0f172a", minHeight: "100vh", color: "#e2e8f0", padding: "2rem" }}>
       <div style={{ maxWidth: 640, margin: "0 auto" }}>
 
-        {/* Header */}
         <div style={{ marginBottom: "2rem" }}>
           <h1 style={{ fontSize: "1.8rem", fontWeight: 700, color: "#f8fafc", margin: 0 }}>
             🎓 Canvas Assignment Agent
           </h1>
           <p style={{ color: "#94a3b8", marginTop: 6 }}>
-            Automatically create GitHub repos or Notion pages from your Canvas assignments.
+            Northeastern Canvas and your GitHub — paste tokens once per browser; they are encrypted on the server.
           </p>
         </div>
 
-        {/* Step 1 - Load Courses */}
+        {sessionAuth && (
+          <Section title={authenticated ? "Your credentials" : "Step 0 — Connect Canvas & GitHub"}>
+            {!authenticated ? (
+              <form onSubmit={connectCredentials}>
+                <p style={{ marginTop: 0, fontSize: 13, color: "#94a3b8" }}>
+                  Canvas base URL: <strong style={{ color: "#e2e8f0" }}>{authStatus?.canvas_institution_url || "—"}</strong>
+                  <br />
+                  Create a Canvas access token under Account → Settings → Approved Integrations. Use a GitHub PAT with repo scope.
+                </p>
+                <label style={{ fontSize: 12, color: "#94a3b8", display: "block", marginTop: 12 }}>Canvas API token</label>
+                <input type="password" autoComplete="off" value={canvasToken} onChange={(ev) => setCanvasToken(ev.target.value)} style={inputStyle} required />
+                <label style={{ fontSize: 12, color: "#94a3b8", display: "block", marginTop: 12 }}>GitHub personal access token</label>
+                <input type="password" autoComplete="off" value={githubToken} onChange={(ev) => setGithubToken(ev.target.value)} style={inputStyle} required />
+                <label style={{ fontSize: 12, color: "#94a3b8", display: "block", marginTop: 12 }}>GitHub username</label>
+                <input type="text" autoComplete="username" value={githubUsername} onChange={(ev) => setGithubUsername(ev.target.value)} style={inputStyle} required />
+                <button type="submit" disabled={authBusy} className={btn} style={{ marginTop: 16, background: "#6366f1", color: "white", border: "none", cursor: "pointer", padding: "10px 20px", borderRadius: 8 }}>
+                  {authBusy ? "Saving…" : "Save & connect"}
+                </button>
+              </form>
+            ) : (
+              <div>
+                <p style={{ margin: 0, color: "#86efac", fontSize: 14 }}>Session active — requests use your stored tokens.</p>
+                <button type="button" onClick={logout} className={btn} style={{ marginTop: 12, background: "#475569", color: "white", border: "none", cursor: "pointer", padding: "8px 16px", borderRadius: 8, fontSize: 13 }}>
+                  Sign out (clear session)
+                </button>
+              </div>
+            )}
+          </Section>
+        )}
+
+        {!sessionAuth && (
+          <div style={{ background: "#1e293b", borderRadius: 12, padding: "1rem 1.2rem", marginBottom: "1.2rem", border: "1px solid #334155", fontSize: 13, color: "#94a3b8" }}>
+            Per-user sessions are off (server has no <code style={{ color: "#cbd5e1" }}>CREDENTIAL_ENCRYPTION_KEY</code>). The API uses Canvas/GitHub tokens from the server environment.
+          </div>
+        )}
+
+        {mainUnlocked && (
+        <>
         <Section title="Step 1 — Load Your Courses">
           <button className={btn} onClick={fetchCourses} disabled={!!loading}
             style={{ background: "#6366f1", color: "white", opacity: loading ? 0.6 : 1, border: "none", cursor: "pointer", padding: "10px 20px", borderRadius: 8 }}>
@@ -162,7 +284,6 @@ export default function App() {
           )}
         </Section>
 
-        {/* Step 2 - Pick Assignment */}
         {assignments.length > 0 && (
           <Section title="Step 2 — Pick an Assignment">
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: "0.9rem" }}>
@@ -224,7 +345,6 @@ export default function App() {
           </Section>
         )}
 
-        {/* Step 3 - Route */}
         {selectedCourse && (
           <Section title="Step 3 — Choose Destination">
             <p style={{ marginTop: 0, marginBottom: "0.9rem", color: "#94a3b8", fontSize: 14 }}>
@@ -320,15 +440,15 @@ export default function App() {
             </button>
           </Section>
         )}
+        </>
+        )}
 
-        {/* Error */}
         {error && (
           <div style={{ background: "#450a0a", border: "1px solid #7f1d1d", borderRadius: 8, padding: "12px 16px", color: "#fca5a5", marginTop: "1rem" }}>
             {error}
           </div>
         )}
 
-        {/* Result */}
         {result && createOutcome && (
           <Section title="✅ Done!">
             <div style={{ background: "#052e16", border: "1px solid #166534", borderRadius: 8, padding: "1rem" }}>

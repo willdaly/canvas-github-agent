@@ -10,9 +10,14 @@ import requests
 class NotionTools:
     """Tools for interacting with Notion API."""
 
-    def __init__(self):
-        self.notion_token = os.getenv("NOTION_TOKEN")
-        self.parent_page_id = os.getenv("NOTION_PARENT_PAGE_ID")
+    def __init__(
+        self,
+        *,
+        notion_token: Optional[str] = None,
+        parent_page_id: Optional[str] = None,
+    ):
+        self.notion_token = (notion_token if notion_token is not None else os.getenv("NOTION_TOKEN")) or ""
+        self.parent_page_id = (parent_page_id if parent_page_id is not None else os.getenv("NOTION_PARENT_PAGE_ID")) or ""
         self.api_version = "2022-06-28"
 
     def _create_assignment_page_sync(
