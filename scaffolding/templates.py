@@ -930,6 +930,302 @@ def _extend_python_requirements(existing_requirements: str, extra_requirements: 
     return "\n".join(lines) + "\n"
 
 
+def _is_python_maze_assignment(requested_files: List[str], assignment_description: str) -> bool:
+    requested_lower = {path.lower() for path in requested_files}
+    description_lower = assignment_description.lower()
+    return (
+        "maze_solvers.py" in requested_lower
+        or (
+            "maze" in description_lower
+            and "solver" in description_lower
+            and "python" in description_lower
+        )
+    )
+
+
+def _build_maze_solver_file(assignment_name: str, function_names: List[str]) -> str:
+    solver_names = list(function_names[:3])
+    defaults = ["maze_solver_one", "maze_solver_two", "maze_solver_three"]
+    for default_name in defaults:
+        if len(solver_names) >= 3:
+            break
+        if default_name not in solver_names:
+            solver_names.append(default_name)
+
+    body = '''from __future__ import annotations
+
+from collections import deque
+from heapq import heappop, heappush
+from pathlib import Path
+from typing import Iterable, Sequence
+
+Point = tuple[int, int]
+Grid = list[list[str]]
+
+
+def _load_maze_lines(maze: str | Sequence[str]) -> list[str]:
+    if isinstance(maze, (list, tuple)):
+        lines = [str(line).rstrip("\\n") for line in maze]
+    elif isinstance(maze, str):
+        candidate_path = Path(maze)
+        if "\\n" not in maze and candidate_path.exists():
+            lines = candidate_path.read_text(encoding="utf-8").splitlines()
+        else:
+            lines = maze.splitlines()
+    else:
+        raise TypeError("maze must be a path, maze text, or a sequence of lines")
+
+    lines = [line.rstrip("\\n") for line in lines if line is not None]
+    if not lines:
+        raise ValueError("maze input is empty")
+    return lines
+
+
+def _parse_maze(maze: str | Sequence[str]) -> tuple[int, int, Grid, Point, Point]:
+    lines = _load_maze_lines(maze)
+    try:
+        width_text, height_text = lines[0].split()
+        width = int(width_text)
+        height = int(height_text)
+    except ValueError as error:
+        raise ValueError("first maze line must contain width and height") from error
+
+    grid_lines = lines[1:]
+    if len(grid_lines) != height:
+        raise ValueError(f"maze height mismatch: expected {height}, found {len(grid_lines)}")
+
+    grid = [list(row) for row in grid_lines]
+    for row in grid:
+        if len(row) != width:
+            raise ValueError(f"maze width mismatch: expected {width}, found {len(row)}")
+
+    start = _find_symbol(grid, "S")
+    goal = _find_symbol(grid, "E")
+    return width, height, grid, start, goal
+
+
+def _find_symbol(grid: Grid, symbol: str) -> Point:
+    for row_index, row in enumerate(grid):
+        for col_index, value in enumerate(row):
+            if value == symbol:
+                return row_index, col_index
+    raise ValueError(f"maze must contain exactly one {symbol}")
+
+
+def _neighbors(grid: Grid, point: Point) -> Iterable[Point]:
+    row, col = point
+    candidates = [
+        (row - 1, col),
+        (row, col + 1),
+        (row + 1, col),
+        (row, col - 1),
+    ]
+    height = len(grid)
+    width = len(grid[0]) if grid else 0
+    for next_row, next_col in candidates:
+        if 0 <= next_row < height and 0 <= next_col < width and grid[next_row][next_col] != "X":
+            yield next_row, next_col
+
+
+def _reconstruct_path(parents: dict[Point, Point | None], goal: Point) -> list[Point]:
+    path: list[Point] = []
+    current: Point | None = goal
+    while current is not None:
+        path.append(current)
+        current = parents[current]
+    path.reverse()
+    return path
+
+
+def _render_solution(width: int, height: int, grid: Grid, path: list[Point]) -> str:
+    solved = [row[:] for row in grid]
+    for row, col in path[1:-1]:
+        if solved[row][col] == " ":
+            solved[row][col] = "*"
+    body = ["".join(row) for row in solved]
+    return "\\n".join([f"{width} {height}", *body])
+
+
+def _heuristic(point: Point, goal: Point) -> int:
+    return abs(point[0] - goal[0]) + abs(point[1] - goal[1])
+
+
+def _solve_bfs(maze: str | Sequence[str]) -> str:
+    width, height, grid, start, goal = _parse_maze(maze)
+    frontier: deque[Point] = deque([start])
+    parents: dict[Point, Point | None] = {start: None}
+
+    while frontier:
+        current = frontier.popleft()
+        if current == goal:
+            return _render_solution(width, height, grid, _reconstruct_path(parents, goal))
+
+        for neighbor in _neighbors(grid, current):
+            if neighbor in parents:
+                continue
+            parents[neighbor] = current
+            frontier.append(neighbor)
+
+    raise ValueError("maze has no solution")
+
+
+def _solve_dfs(maze: str | Sequence[str]) -> str:
+    width, height, grid, start, goal = _parse_maze(maze)
+    frontier: list[Point] = [start]
+    parents: dict[Point, Point | None] = {start: None}
+
+    while frontier:
+        current = frontier.pop()
+        if current == goal:
+            return _render_solution(width, height, grid, _reconstruct_path(parents, goal))
+
+        neighbors = list(_neighbors(grid, current))
+        for neighbor in reversed(neighbors):
+            if neighbor in parents:
+                continue
+            parents[neighbor] = current
+            frontier.append(neighbor)
+
+    raise ValueError("maze has no solution")
+
+
+def _solve_astar(maze: str | Sequence[str]) -> str:
+    width, height, grid, start, goal = _parse_maze(maze)
+    frontier: list[tuple[int, int, Point]] = [(0, 0, start)]
+    parents: dict[Point, Point | None] = {start: None}
+    cost_so_far: dict[Point, int] = {start: 0}
+    tie_breaker = 1
+
+    while frontier:
+        _, _, current = heappop(frontier)
+        if current == goal:
+            return _render_solution(width, height, grid, _reconstruct_path(parents, goal))
+
+        for neighbor in _neighbors(grid, current):
+            tentative_cost = cost_so_far[current] + 1
+            if tentative_cost >= cost_so_far.get(neighbor, tentative_cost + 1):
+                continue
+
+            cost_so_far[neighbor] = tentative_cost
+            parents[neighbor] = current
+            priority = tentative_cost + _heuristic(neighbor, goal)
+            heappush(frontier, (priority, tie_breaker, neighbor))
+            tie_breaker += 1
+
+    raise ValueError("maze has no solution")
+
+
+'''
+
+    algorithm_defs = [
+        (solver_names[0], "breadth-first search", "_solve_bfs"),
+        (solver_names[1], "depth-first search", "_solve_dfs"),
+        (solver_names[2], "A* search with the Manhattan-distance heuristic", "_solve_astar"),
+    ]
+
+    function_blocks = []
+    for function_name, description, implementation_name in algorithm_defs:
+        function_blocks.append(
+            f"def {function_name}(maze: str | Sequence[str]) -> str:\n"
+            f'    """Solve the maze with {description} and return the solved maze text."""\n'
+            f"    return {implementation_name}(maze)\n"
+        )
+
+    return f'"""{assignment_name} maze solver interface."""\n\n' + body + "\n\n".join(function_blocks) + "\n"
+
+
+def _build_maze_runner_file(function_names: List[str]) -> str:
+    solver_names = list(function_names[:3])
+    defaults = ["maze_solver_one", "maze_solver_two", "maze_solver_three"]
+    for default_name in defaults:
+        if len(solver_names) >= 3:
+            break
+        if default_name not in solver_names:
+            solver_names.append(default_name)
+
+    return (
+        '"""Command-line runner for the generated maze solvers."""\n\n'
+        f"from maze_solvers import {solver_names[0]}, {solver_names[1]}, {solver_names[2]}\n\n"
+        "\n"
+        "def main() -> None:\n"
+        '    """Load maze.txt and print each solver output."""\n'
+        '    maze_path = "maze.txt"\n'
+        f"    solvers = [(\"{solver_names[0]}\", {solver_names[0]}), (\"{solver_names[1]}\", {solver_names[1]}), (\"{solver_names[2]}\", {solver_names[2]})]\n"
+        "    for name, solver in solvers:\n"
+        "        print(f\"=== {name} ===\")\n"
+        "        print(solver(maze_path))\n"
+        "        print()\n\n"
+        'if __name__ == "__main__":\n'
+        "    main()\n"
+    )
+
+
+def _build_maze_solver_tests(function_names: List[str]) -> str:
+    solver_names = list(function_names[:3])
+    defaults = ["maze_solver_one", "maze_solver_two", "maze_solver_three"]
+    for default_name in defaults:
+        if len(solver_names) >= 3:
+            break
+        if default_name not in solver_names:
+            solver_names.append(default_name)
+
+    return (
+        f"from maze_solvers import {solver_names[0]}, {solver_names[1]}, {solver_names[2]}\n\n"
+        'SAMPLE_MAZE = """5 5\nS   X\nXX XX\nX   X\nX XXX\nX   E\n"""\n\n'
+        "\n"
+        "def _assert_valid_solution(result: str) -> int:\n"
+        '    lines = result.splitlines()\n'
+        '    assert lines[0] == "5 5"\n'
+        '    body = "\\n".join(lines[1:])\n'
+        '    assert "S" in body\n'
+        '    assert "E" in body\n'
+        '    assert "*" in body\n'
+        '    return body.count("*")\n\n'
+        f"def test_{solver_names[0]}_returns_solved_maze():\n"
+        f"    steps = _assert_valid_solution({solver_names[0]}(SAMPLE_MAZE))\n"
+        "    assert steps > 0\n\n"
+        f"def test_{solver_names[1]}_returns_solved_maze():\n"
+        f"    steps = _assert_valid_solution({solver_names[1]}(SAMPLE_MAZE))\n"
+        "    assert steps > 0\n\n"
+        f"def test_{solver_names[2]}_matches_bfs_path_length():\n"
+        f"    bfs_steps = _assert_valid_solution({solver_names[0]}(SAMPLE_MAZE))\n"
+        f"    astar_steps = _assert_valid_solution({solver_names[2]}(SAMPLE_MAZE))\n"
+        "    assert astar_steps == bfs_steps\n"
+    )
+
+
+def _build_maze_report_template(assignment_name: str) -> str:
+    return (
+        f"# {assignment_name} Report\n\n"
+        "## Introduction to Search Algorithms\n\n"
+        "Summarize uninformed versus informed search and explain why maze solving is a useful benchmark problem.\n\n"
+        "## Selected Algorithms\n\n"
+        "- Breadth-first search (blind search)\n"
+        "- Depth-first search (blind search)\n"
+        "- A* search (heuristic search)\n\n"
+        "## Heuristics Used\n\n"
+        "Document the Manhattan-distance heuristic used by A* and explain why it is admissible for a 4-direction grid maze.\n\n"
+        "## Performance Comparison\n\n"
+        "Record the path length, nodes expanded, and runtime for each solver on the assigned report maze.\n\n"
+        "## Optimality, Time, and Space Analysis\n\n"
+        "Compare the optimality of the returned paths, the time taken, and the memory required by each approach.\n\n"
+        "## Maze Variations and Performance Impact\n\n"
+        "Describe how added walls, wider corridors, or misleading dead ends would change the performance of each algorithm.\n\n"
+        "## Real-life Application\n\n"
+        "Describe a real-world situation where one of these search algorithms would be useful.\n"
+    )
+
+
+def _append_maze_readme_notes(existing_readme: str) -> str:
+    return existing_readme.rstrip() + (
+        "\n\n## Maze Solver Interface\n"
+        "- `maze_solvers.py` contains working implementations of breadth-first search, depth-first search, and A* search.\n"
+        "- Each solver accepts either a maze file path, raw maze text, or a sequence of maze lines.\n"
+        "- `main.py` runs all three solvers against `maze.txt` for quick smoke testing.\n"
+        "- Run `pytest tests/test_maze_solvers.py` to validate the generated maze solver interface.\n"
+    )
+
+
 def build_assignment_specific_files(
     assignment_name: str,
     assignment_description: str,
@@ -948,8 +1244,12 @@ def build_assignment_specific_files(
     assignment_summary = (short_description or assignment_description[:200]).strip()
 
     requested_lower = {path.lower() for path in requested_files}
+    is_maze_assignment = language_lower in {"python", "py"} and _is_python_maze_assignment(
+        requested_files,
+        assignment_description,
+    )
 
-    if language_lower in {"python", "py"} and "maze_solvers.py" in requested_lower:
+    if is_maze_assignment:
         maze_functions = [
             name for name in requested_functions
             if name.startswith("maze_solver_") or name in {
@@ -961,42 +1261,22 @@ def build_assignment_specific_files(
         if not maze_functions:
             maze_functions = ["maze_solver_one", "maze_solver_two", "maze_solver_three"]
 
-        function_blocks = []
-        for function_name in maze_functions:
-            function_blocks.append(
-                f"def {function_name}(maze):\n"
-                "    \"\"\"Solve the maze and return the solved maze output.\"\"\"\n"
-                "    return maze\n"
-            )
+        files["maze_solvers.py"] = _build_maze_solver_file(assignment_name, maze_functions)
+        files["main.py"] = _build_maze_runner_file(maze_functions)
+        files["tests/test_maze_solvers.py"] = _build_maze_solver_tests(maze_functions)
 
-        files["maze_solvers.py"] = (
-            f'"""{assignment_name} maze solver interface."""\n\n' +
-            "\n\n".join(function_blocks) +
-            "\n"
-        )
-
-    if "maze.txt" in requested_lower or "maze" in assignment_description.lower():
+    if is_maze_assignment or "maze.txt" in requested_lower or "maze" in assignment_description.lower():
         files["maze.txt"] = (
-            "10 6\n"
-            "XXXXXXXXXX\n"
-            "X        S\n"
-            "X XXXXXX X\n"
-            "X X    XXX\n"
-            "X   XX   E\n"
-            "XXXXXXXXXX\n"
+            "5 5\n"
+            "S   X\n"
+            "XX XX\n"
+            "X   X\n"
+            "X XXX\n"
+            "X   E\n"
         )
 
-    if "report.md" in requested_lower or "report" in assignment_description.lower():
-        files["Report.md"] = (
-            f"# {assignment_name} Report\n\n"
-            "## Introduction to Search Algorithms\n\n"
-            "## Selected Algorithms\n\n"
-            "## Heuristics Used\n\n"
-            "## Performance Comparison\n\n"
-            "## Optimality, Time, and Space Analysis\n\n"
-            "## Maze Variations and Performance Impact\n\n"
-            "## Real-life Application\n"
-        )
+    if is_maze_assignment or "report.md" in requested_lower or "report" in assignment_description.lower():
+        files["Report.md"] = _build_maze_report_template(assignment_name)
 
     if language_lower in {"python", "py"} and assignment_mentions_jupyter_notebook(assignment_description):
         notebook_imports = inferred_python_imports
@@ -1092,6 +1372,9 @@ def generate_starter_files(
             short_description=short_description,
         )
     )
+
+    if language.lower() in {"python", "py"} and "maze_solvers.py" in files:
+        files["README.md"] = _append_maze_readme_notes(files["README.md"])
 
     if language.lower() in {"python", "py"}:
         inferred_imports = infer_python_assignment_imports(assignment_description)
