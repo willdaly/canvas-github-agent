@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from app.agent import CanvasGitHubAgent
 from scaffolding.templates import build_service_oasf_record
 from tools.canvas_tools import CanvasTools
+from tools.course_context_tools import CourseContextTools
 
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,24 @@ def build_capabilities_payload() -> dict[str, Any]:
                 "description": "Return the service-level OASF record.",
             },
             {
+                "name": "ingest_course_document",
+                "method": "POST",
+                "path": "/courses/{course_id}/documents/ingest",
+                "description": "Parse a course PDF with Docling and index it into Chroma.",
+            },
+            {
+                "name": "list_course_documents",
+                "method": "GET",
+                "path": "/courses/{course_id}/documents",
+                "description": "List course documents already indexed for retrieval.",
+            },
+            {
+                "name": "search_course_context",
+                "method": "POST",
+                "path": "/courses/{course_id}/context/search",
+                "description": "Search indexed course documents for assignment-relevant context.",
+            },
+            {
                 "name": "create_destination",
                 "method": "POST",
                 "path": "/create",
@@ -127,6 +146,8 @@ def build_capabilities_payload() -> dict[str, Any]:
             "assignment_types": ["coding", "writing"],
             "destinations": ["github", "notion"],
             "supported_languages": ["python", "r"],
+            "course_context_backend": "chroma",
+            "course_context_parser": "docling",
         },
         "result_schema": {
             "name": TASK_RESULT_SCHEMA,
@@ -214,6 +235,9 @@ def _build_task_response(req: "CreateRequest", result: dict[str, Any]) -> dict[s
                 "id": page.get("id"),
             }
         )
+
+    if result.get("course_context"):
+        details["course_context"] = result["course_context"]
 
     return {
         "status": "completed",
@@ -332,6 +356,16 @@ class CreateRequest(BaseModel):
     notion_content_mode: Optional[str] = None
 
 
+class CourseDocumentIngestRequest(BaseModel):
+    file_path: str
+    document_name: Optional[str] = None
+
+
+class CourseContextSearchRequest(BaseModel):
+    query: str
+    limit: int = 5
+
+
 @app.get("/health")
 async def get_health():
     """Return a minimal service health payload."""
@@ -397,6 +431,60 @@ async def get_assignments(course_id: int):
     except Exception:
         logger.exception("Failed to list assignments for course_id=%s", course_id)
         raise HTTPException(status_code=500, detail="Failed to fetch assignments.")
+
+
+@app.post("/courses/{course_id}/documents/ingest")
+async def ingest_course_document(course_id: int, req: CourseDocumentIngestRequest):
+    """Parse a local course PDF and index it into Chroma."""
+    try:
+        tools = CourseContextTools()
+        return await asyncio.to_thread(tools.ingest_pdf, course_id, req.file_path, req.document_name)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Course document not found.")
+    except (RuntimeError, ValueError) as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to ingest course document for course_id=%s", course_id)
+        raise HTTPException(status_code=500, detail="Failed to ingest course document.")
+
+
+@app.get("/courses/{course_id}/documents")
+async def get_course_documents(course_id: int):
+    """List course documents currently indexed for retrieval."""
+    try:
+        tools = CourseContextTools()
+        documents = await asyncio.to_thread(tools.list_documents, course_id)
+        return {"documents": documents}
+    except RuntimeError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to list course documents for course_id=%s", course_id)
+        raise HTTPException(status_code=500, detail="Failed to list course documents.")
+
+
+@app.post("/courses/{course_id}/context/search")
+async def search_course_context(course_id: int, req: CourseContextSearchRequest):
+    """Search the Chroma-backed course context store for a course."""
+    try:
+        tools = CourseContextTools()
+        results = await asyncio.to_thread(tools.search_context, course_id, req.query, req.limit)
+        return {
+            "course_id": course_id,
+            "query": req.query,
+            "limit": req.limit,
+            "results": results,
+        }
+    except RuntimeError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to search course context for course_id=%s", course_id)
+        raise HTTPException(status_code=500, detail="Failed to search course context.")
 
 
 @app.get("/metadata/oasf-record")

@@ -9,6 +9,8 @@
     "list_assignments",
     "fetch_assignment",
     "infer_assignment_type",
+    "ingest_course_document",
+    "search_course_context",
     "create_github_repository",
     "generate_starter_files",
     "create_notion_page"
@@ -42,6 +44,7 @@
     ],
     "tools_used": [
       "CanvasTools",
+      "CourseContextTools",
       "GitHubTools",
       "NotionTools"
     ],
@@ -53,6 +56,11 @@
     "supported_languages": [
       "python",
       "r"
+    ],
+    "course_context_backend": "chroma",
+    "course_context_parser": "docling",
+    "supported_course_document_formats": [
+      "pdf"
     ],
     "notebook_support": "python notebook scaffolding for assignments that explicitly require Jupyter notebook submission"
   }

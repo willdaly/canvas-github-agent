@@ -14,6 +14,7 @@ import pytest
 from scaffolding.templates import (
     assignment_mentions_jupyter_notebook,
     build_service_fact_card,
+    build_course_context_markdown,
     build_service_oasf_record,
     infer_python_assignment_imports,
     infer_python_assignment_requirements,
@@ -144,6 +145,7 @@ class TestTemplates:
         assert checked_in["name"] == "Canvas Assignment Workflow"
         assert checked_in["metadata"]["architecture"] == "deterministic workflow orchestrator"
         assert checked_in["interoperability"]["mcp"] == "canvas-github-agent-mcp"
+        assert checked_in["metadata"]["course_context_backend"] == "chroma"
 
     def test_build_service_oasf_record_matches_checked_in_json(self):
         """The checked-in OASF record should match the generated payload."""
@@ -164,10 +166,47 @@ class TestTemplates:
         assert checked_in["skills"][0]["id"] == 1001
         assert checked_in["locators"][0]["type"] == "source_code"
         assert checked_in["locators"][1]["type"] == "url"
+        assert checked_in["annotations"]["course_context_backend"] == "chroma"
         assert checked_in["annotations"]["mcp_stdio_command"] == "canvas-github-agent-mcp"
         assert checked_in["annotations"]["task_submission_endpoint"] == "http://localhost:8000/tasks"
         assert checked_in["annotations"]["task_status_schema"] == "task_status_v1"
         assert checked_in["annotations"]["health_endpoint"] == "http://localhost:8000/health"
+
+    def test_generate_starter_files_adds_course_context_file(self):
+        files = generate_starter_files(
+            assignment_name="Posterior Homework",
+            assignment_description="Implement the posterior update.",
+            due_date="2026-03-21",
+            language="python",
+            course_context=[
+                {
+                    "document_name": "slides.pdf",
+                    "section_title": "Bayes Review",
+                    "distance": 0.12,
+                    "text": "Section: Bayes Review\n\nPosterior is proportional to prior times likelihood.",
+                }
+            ],
+        )
+
+        assert "COURSE_CONTEXT.md" in files
+        assert "Bayes Review" in files["COURSE_CONTEXT.md"]
+        assert "COURSE_CONTEXT.md" in files["README.md"]
+
+    def test_build_course_context_markdown(self):
+        content = build_course_context_markdown(
+            [
+                {
+                    "document_name": "slides.pdf",
+                    "section_title": "Bayes Review",
+                    "distance": 0.12,
+                    "text": "Section: Bayes Review\n\nPosterior is proportional to prior times likelihood.",
+                }
+            ]
+        )
+
+        assert "# Course Context" in content
+        assert "Bayes Review" in content
+        assert "slides.pdf" in content
 
     def test_extract_required_filenames(self):
         """Extract explicit filenames from assignment instructions."""
@@ -584,6 +623,50 @@ class TestCanvasGitHubAgent:
             agent.create_notion_page_for_assignment.assert_not_awaited()
             assert result["destination"] == "github"
 
+    def test_run_passes_course_context_to_github_generation(self):
+        from app.agent import CanvasGitHubAgent
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_TOKEN': 'test_token',
+            'GITHUB_TOKEN': 'test_gh_token',
+            'GITHUB_USERNAME': 'testuser'
+        }):
+            agent = CanvasGitHubAgent()
+            assignment = {
+                "name": "Posterior Homework",
+                "description": "Implement Bayesian updating.",
+                "due_at": "2026-03-01"
+            }
+            context = [
+                {
+                    "document_name": "slides.pdf",
+                    "section_title": "Bayes Review",
+                    "text": "Section: Bayes Review\n\nPosterior is proportional to prior times likelihood.",
+                }
+            ]
+
+            agent.fetch_course_context = AsyncMock(return_value=context)
+            agent.create_repository_for_assignment = AsyncMock(return_value={
+                "repository": {"name": "posterior-homework", "owner": {"login": "testuser"}},
+                "files_created": ["README.md", "COURSE_CONTEXT.md"],
+                "assignment": assignment,
+            })
+
+            result = asyncio.run(
+                agent.run(
+                    course_id=123,
+                    assignment_data=assignment,
+                    assignment_type="coding",
+                )
+            )
+
+            agent.create_repository_for_assignment.assert_awaited_once_with(
+                assignment,
+                "python",
+                course_context=context,
+            )
+            assert result["course_context"] == context
+
     def test_run_routes_writing_to_notion(self):
         """Run routes writing assignments to Notion page creation path."""
         from app.agent import CanvasGitHubAgent
@@ -619,6 +702,7 @@ class TestCanvasGitHubAgent:
             agent.create_notion_page_for_assignment_with_mode.assert_awaited_once_with(
                 assignment,
                 content_mode="text",
+                course_context=[],
             )
             assert result["destination"] == "notion"
 
