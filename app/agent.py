@@ -4,13 +4,14 @@ import asyncio
 import os
 import re
 from datetime import datetime
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 from dateutil import parser as dateutil_parser
 from dotenv import load_dotenv
 
 from scaffolding.templates import generate_starter_files, html_to_markdown, normalize_slug
 from tools.canvas_tools import CanvasTools
+from tools.course_context_tools import CourseContextTools
 from tools.github_tools import GitHubTools
 from tools.notion_tools import NotionTools
 
@@ -82,11 +83,24 @@ class CanvasGitHubAgent:
 
     def __init__(self):
         self.canvas_tools = CanvasTools()
+        self.course_context_tools = CourseContextTools()
         self.github_tools = GitHubTools()
         self.notion_tools = NotionTools()
         self.github_username = os.getenv("GITHUB_USERNAME")
         _org = os.getenv("GITHUB_ORG", "").strip()
         self.github_org = _org if _org and not _org.startswith("#") else ""
+
+    @staticmethod
+    def format_course_context(course_context: Sequence[dict], max_items: int = 3) -> str:
+        """Format retrieved course context into a compact human-readable block."""
+        if not course_context:
+            return ""
+
+        lines = ["Relevant course context:"]
+        for item in list(course_context)[:max_items]:
+            title = item.get("section_title") or item.get("document_name") or "Course reference"
+            lines.append(f"- {title}: {item.get('text', '').strip()[:350]}")
+        return "\n".join(lines)
 
     @staticmethod
     def strip_html(text: str) -> str:
@@ -137,6 +151,7 @@ class CanvasGitHubAgent:
         self,
         assignment: dict,
         language: str = "python",
+        course_context: Optional[Sequence[dict]] = None,
     ) -> Optional[dict]:
         """Create a GitHub repository with assignment starter files."""
         assignment_name = assignment.get("name", "Assignment")
@@ -170,6 +185,7 @@ class CanvasGitHubAgent:
             short_description=short_description,
             due_date=due_at,
             language=language,
+            course_context=list(course_context or []),
         )
 
         owner = self.github_org if self.github_org else self.github_username
@@ -187,6 +203,7 @@ class CanvasGitHubAgent:
         return {
             "repository": repo,
             "assignment": assignment,
+            "course_context": list(course_context or []),
             "files_created": list(starter_files.keys()),
             "files_uploaded": files_ok,
         }
@@ -199,10 +216,14 @@ class CanvasGitHubAgent:
         self,
         assignment: dict,
         content_mode: str = "structured",
+        course_context: Optional[Sequence[dict]] = None,
     ) -> Optional[dict]:
         """Create a Notion page for a writing assignment with a chosen content mode."""
         assignment_name = assignment.get("name", "Assignment")
         assignment_description = self.strip_html(assignment.get("description", ""))
+        context_block = self.format_course_context(course_context or [])
+        if context_block:
+            assignment_description = f"{assignment_description}\n\n{context_block}".strip()
         due_at = assignment.get("due_at", "No due date")
 
         print(f"\nCreating Notion page for writing assignment: {assignment_name}")
@@ -219,7 +240,33 @@ class CanvasGitHubAgent:
             print("   - NOTION_PARENT_PAGE_ID is missing or invalid")
             return None
 
-        return {"page": page, "assignment": assignment}
+        return {"page": page, "assignment": assignment, "course_context": list(course_context or [])}
+
+    async def fetch_course_context(self, course_id: int, assignment: dict, limit: int = 5) -> list[dict[str, Any]]:
+        """Retrieve relevant course-document chunks for the given assignment."""
+        assignment_name = assignment.get("name", "").strip()
+        assignment_description = self.strip_html(assignment.get("description", ""))
+        query = "\n\n".join(part for part in [assignment_name, assignment_description] if part).strip()
+        if not query:
+            return []
+
+        try:
+            results = await asyncio.to_thread(
+                self.course_context_tools.search_context,
+                course_id,
+                query,
+                limit,
+            )
+        except RuntimeError as error:
+            print(f"\n⚠️  Course context search skipped: {error}")
+            return []
+        except Exception as error:
+            print(f"\n⚠️  Course context search failed: {error}")
+            return []
+
+        if results:
+            print(f"\n📎 Retrieved {len(results)} course context matches from your course documents.")
+        return results
 
     async def run(
         self,
@@ -246,6 +293,7 @@ class CanvasGitHubAgent:
         print(f"\n✅ Found assignment: {assignment.get('name')}")
         print(f"   Description: {assignment.get('description', 'N/A')[:100]}...")
         print(f"   Due date: {assignment.get('due_at', 'N/A')}")
+        course_context = await self.fetch_course_context(course_id, assignment)
 
         if assignment_type not in {"coding", "writing"}:
             assignment_type = self.infer_assignment_type(assignment)
@@ -257,7 +305,11 @@ class CanvasGitHubAgent:
 
         if assignment_type == "coding":
             print(f"\n🚀 Creating GitHub repository with {language} starter code...")
-            result = await self.create_repository_for_assignment(assignment, language)
+            result = await self.create_repository_for_assignment(
+                assignment,
+                language,
+                course_context=course_context,
+            )
 
             if not result or "repository" not in result:
                 print("\n❌ Repository creation failed. See errors above.")
@@ -294,6 +346,7 @@ class CanvasGitHubAgent:
             result = await self.create_notion_page_for_assignment_with_mode(
                 assignment,
                 content_mode=notion_content_mode,
+                course_context=course_context,
             )
 
             if not result or "page" not in result:
@@ -312,7 +365,50 @@ class CanvasGitHubAgent:
             print("✨ Done! Your writing assignment Notion page is ready.")
         print("=" * 80)
 
+        if result is not None:
+            result["course_context"] = course_context
+
         return result
+
+
+async def ingest_course_pdf(course_id: int, file_path: str, document_name: Optional[str] = None):
+    """Ingest a course PDF into the local Chroma-backed course context store."""
+    tools = CourseContextTools()
+    result = await asyncio.to_thread(tools.ingest_pdf, course_id, file_path, document_name)
+    print("\n✅ Course document ingested successfully!")
+    print(f"   Course ID: {result['course_id']}")
+    print(f"   Document: {result['document_name']}")
+    print(f"   Chunks indexed: {result['chunk_count']}")
+    print(f"   Collection: {result['collection']}")
+
+
+async def search_course_context(course_id: int, query: str, limit: int = 5):
+    """Search ingested course context for an assignment-like query."""
+    tools = CourseContextTools()
+    results = await asyncio.to_thread(tools.search_context, course_id, query, limit)
+
+    print(f"\n🔎 Retrieved {len(results)} course context matches")
+    print("-" * 80)
+    for index, item in enumerate(results, start=1):
+        print(f"{index}. {item.get('section_title') or item.get('document_name') or 'Match'}")
+        print(f"   Source: {item.get('document_name', 'Unknown document')}")
+        if item.get("distance") is not None:
+            print(f"   Distance: {item['distance']:.4f}")
+        print(f"   {item.get('text', '')[:400]}\n")
+
+
+async def list_course_documents(course_id: int):
+    """List PDFs already indexed for a course."""
+    tools = CourseContextTools()
+    documents = await asyncio.to_thread(tools.list_documents, course_id)
+
+    print(f"\n📚 Indexed course documents for course {course_id}")
+    print("-" * 80)
+    for document in documents:
+        print(
+            f"{document['document_name']} | chunks={document['chunk_count']} | "
+            f"source={document.get('source_path', 'N/A')}"
+        )
 
 
 async def list_courses():
@@ -364,7 +460,14 @@ async def main():
     )
     parser.add_argument(
         "command",
-        choices=["list-courses", "list-assignments", "create-repo"],
+        choices=[
+            "list-courses",
+            "list-assignments",
+            "create-repo",
+            "ingest-pdf",
+            "list-documents",
+            "search-context",
+        ],
         help="Command to execute",
     )
     parser.add_argument("--course-id", type=int, help="Canvas course ID")
@@ -389,6 +492,10 @@ async def main():
         action="store_true",
         help="Prompt to confirm inferred assignment type before creating destination",
     )
+    parser.add_argument("--file-path", help="Path to a course PDF to ingest into Chroma")
+    parser.add_argument("--document-name", help="Optional display name for the ingested course PDF")
+    parser.add_argument("--query", help="Query text for course context search")
+    parser.add_argument("--limit", type=int, default=5, help="Maximum number of search results to return")
 
     args = parser.parse_args()
 
@@ -412,6 +519,21 @@ async def main():
             assignment_type=args.assignment_type,
             confirm_assignment_type=args.confirm_type,
         )
+    elif args.command == "ingest-pdf":
+        if not args.course_id or not args.file_path:
+            print("Error: --course-id and --file-path are required for ingest-pdf")
+            return
+        await ingest_course_pdf(args.course_id, args.file_path, args.document_name)
+    elif args.command == "list-documents":
+        if not args.course_id:
+            print("Error: --course-id is required for list-documents")
+            return
+        await list_course_documents(args.course_id)
+    elif args.command == "search-context":
+        if not args.course_id or not args.query:
+            print("Error: --course-id and --query are required for search-context")
+            return
+        await search_course_context(args.course_id, args.query, args.limit)
 
 
 def run() -> None:

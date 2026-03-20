@@ -78,6 +78,43 @@ async def get_oasf_record() -> dict[str, Any]:
         _raise_tool_error(exc)
 
 
+@server.tool(description="Parse a course PDF with Docling and index it into Chroma.")
+async def ingest_course_document(
+    course_id: int,
+    file_path: str,
+    document_name: Optional[str] = None,
+) -> dict[str, Any]:
+    """Ingest a course document for later retrieval."""
+    try:
+        return await api.ingest_course_document(
+            course_id,
+            api.CourseDocumentIngestRequest(file_path=file_path, document_name=document_name),
+        )
+    except HTTPException as exc:
+        _raise_tool_error(exc)
+
+
+@server.tool(description="List course documents currently indexed for retrieval.")
+async def list_course_documents(course_id: int) -> dict[str, Any]:
+    """Return indexed course documents for a course."""
+    try:
+        return await api.get_course_documents(course_id)
+    except HTTPException as exc:
+        _raise_tool_error(exc)
+
+
+@server.tool(description="Search indexed course documents for assignment-relevant context.")
+async def search_course_context(course_id: int, query: str, limit: int = 5) -> dict[str, Any]:
+    """Search the course context store for relevant chunks."""
+    try:
+        return await api.search_course_context(
+            course_id,
+            api.CourseContextSearchRequest(query=query, limit=limit),
+        )
+    except HTTPException as exc:
+        _raise_tool_error(exc)
+
+
 @server.tool(
     description=(
         "Synchronously create a GitHub repository for a coding assignment or a "

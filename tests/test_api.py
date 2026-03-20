@@ -78,6 +78,57 @@ class StubTaskScheduler:
         self.calls.append((task_id, req))
 
 
+class StubCourseContextTools:
+    def ingest_pdf(self, course_id, file_path, document_name=None):
+        return {
+            "status": "ingested",
+            "course_id": course_id,
+            "document_id": "slides",
+            "document_name": document_name or "slides.pdf",
+            "chunk_count": 3,
+            "collection": "course-context",
+            "storage_path": ".chroma",
+        }
+
+    def list_documents(self, course_id):
+        return [
+            {
+                "course_id": course_id,
+                "document_id": "slides",
+                "document_name": "slides.pdf",
+                "source_path": "docs/slides.pdf",
+                "chunk_count": 3,
+            }
+        ]
+
+    def search_context(self, course_id, query, limit):
+        return [
+            {
+                "id": "course-123:slides:0000",
+                "course_id": course_id,
+                "document_id": "slides",
+                "document_name": "slides.pdf",
+                "section_title": "Bayes Review",
+                "chunk_index": 0,
+                "distance": 0.1234,
+                "text": "Section: Bayes Review\n\nPosterior is proportional to prior times likelihood.",
+            }
+        ][:limit]
+
+
+class StubCourseContextToolsFileMissing:
+    def ingest_pdf(self, course_id, file_path, document_name=None):
+        raise FileNotFoundError(file_path)
+
+
+class StubCourseContextToolsError:
+    def list_documents(self, course_id):
+        raise RuntimeError("course context not configured")
+
+    def search_context(self, course_id, query, limit):
+        raise RuntimeError("course context not configured")
+
+
 def test_get_oasf_record_success(monkeypatch):
     monkeypatch.setattr(
         api,
@@ -143,6 +194,80 @@ def test_submit_task_returns_queued_task(monkeypatch):
     assert payload["result"] is None
     assert payload["error"] is None
     assert len(scheduler.calls) == 1
+
+
+def test_ingest_course_document_success(monkeypatch):
+    monkeypatch.setattr(api, "CourseContextTools", StubCourseContextTools)
+
+    response = asyncio.run(
+        _request(
+            "POST",
+            "/courses/123/documents/ingest",
+            {"file_path": "docs/slides.pdf", "document_name": "AAI Slides"},
+        )
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ingested"
+    assert payload["course_id"] == 123
+    assert payload["document_name"] == "AAI Slides"
+
+
+def test_ingest_course_document_returns_404_for_missing_file(monkeypatch):
+    monkeypatch.setattr(api, "CourseContextTools", StubCourseContextToolsFileMissing)
+
+    response = asyncio.run(
+        _request(
+            "POST",
+            "/courses/123/documents/ingest",
+            {"file_path": "docs/missing.pdf"},
+        )
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Course document not found."
+
+
+def test_get_course_documents_success(monkeypatch):
+    monkeypatch.setattr(api, "CourseContextTools", StubCourseContextTools)
+
+    response = asyncio.run(_request("GET", "/courses/123/documents"))
+
+    assert response.status_code == 200
+    assert response.json()["documents"][0]["document_name"] == "slides.pdf"
+
+
+def test_search_course_context_success(monkeypatch):
+    monkeypatch.setattr(api, "CourseContextTools", StubCourseContextTools)
+
+    response = asyncio.run(
+        _request(
+            "POST",
+            "/courses/123/context/search",
+            {"query": "posterior update", "limit": 1},
+        )
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["course_id"] == 123
+    assert payload["results"][0]["section_title"] == "Bayes Review"
+
+
+def test_search_course_context_sanitizes_runtime_errors(monkeypatch):
+    monkeypatch.setattr(api, "CourseContextTools", StubCourseContextToolsError)
+
+    response = asyncio.run(
+        _request(
+            "POST",
+            "/courses/123/context/search",
+            {"query": "posterior update", "limit": 1},
+        )
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "course context not configured"
 
 
 def test_get_task_returns_existing_task():

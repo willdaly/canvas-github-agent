@@ -1,6 +1,8 @@
 # Repo-specific local artifacts
 .DS_Store
 .vscode/
+.chroma/
+docs/AAI6660_Spring_2026 (1).pdf
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

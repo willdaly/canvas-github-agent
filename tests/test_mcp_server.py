@@ -54,6 +54,25 @@ class StubTaskScheduler:
         self.calls.append((task_id, req))
 
 
+class StubCourseContextTools:
+    def ingest_pdf(self, course_id, file_path, document_name=None):
+        return {
+            "status": "ingested",
+            "course_id": course_id,
+            "document_id": "slides",
+            "document_name": document_name or "slides.pdf",
+            "chunk_count": 2,
+            "collection": "course-context",
+            "storage_path": ".chroma",
+        }
+
+    def list_documents(self, course_id):
+        return [{"course_id": course_id, "document_name": "slides.pdf", "chunk_count": 2}]
+
+    def search_context(self, course_id, query, limit):
+        return [{"course_id": course_id, "document_name": "slides.pdf", "section_title": "Bayes Review", "text": "Section: Bayes Review\n\nPosterior is proportional to prior times likelihood."}]
+
+
 def test_server_lists_expected_tools_and_resources():
     async def _exercise_registry():
         tools = await mcp_server.server.list_tools()
@@ -67,6 +86,9 @@ def test_server_lists_expected_tools_and_resources():
         "list_assignments",
         "get_capabilities",
         "get_oasf_record",
+        "ingest_course_document",
+        "list_course_documents",
+        "search_course_context",
         "create_destination",
         "submit_task",
         "get_task_status",
@@ -106,6 +128,35 @@ def test_create_destination_tool(monkeypatch):
     assert payload["status"] == "completed"
     assert payload["route"]["destination"] == "github"
     assert payload["artifacts"][0]["url"] == "https://example.com/repo"
+
+
+def test_search_course_context_tool(monkeypatch):
+    monkeypatch.setattr(api, "CourseContextTools", StubCourseContextTools)
+
+    result = asyncio.run(
+        mcp_server.server.call_tool(
+            "search_course_context",
+            {"course_id": 123, "query": "posterior update", "limit": 1},
+        )
+    )
+
+    payload = _decode_tool_payload(result)
+    assert payload["results"][0]["section_title"] == "Bayes Review"
+
+
+def test_ingest_course_document_tool(monkeypatch):
+    monkeypatch.setattr(api, "CourseContextTools", StubCourseContextTools)
+
+    result = asyncio.run(
+        mcp_server.server.call_tool(
+            "ingest_course_document",
+            {"course_id": 123, "file_path": "docs/slides.pdf", "document_name": "AAI Slides"},
+        )
+    )
+
+    payload = _decode_tool_payload(result)
+    assert payload["status"] == "ingested"
+    assert payload["document_name"] == "AAI Slides"
 
 
 def test_submit_task_and_get_task_status_tools(monkeypatch):

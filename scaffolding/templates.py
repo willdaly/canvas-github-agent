@@ -75,6 +75,31 @@ def html_to_markdown(html: str) -> str:
 
     return text
 
+
+def build_course_context_markdown(course_context: List[Dict[str, Any]]) -> str:
+    """Render retrieved course-context chunks into a companion markdown file."""
+    lines = [
+        "# Course Context",
+        "",
+        "This file contains relevant excerpts retrieved from course reference material.",
+        "",
+    ]
+
+    for index, item in enumerate(course_context, start=1):
+        title = item.get("section_title") or item.get("document_name") or f"Match {index}"
+        lines.append(f"## Match {index}: {title}")
+        document_name = item.get("document_name")
+        if document_name:
+            lines.append(f"- Source: {document_name}")
+        distance = item.get("distance")
+        if distance is not None:
+            lines.append(f"- Distance: {distance:.4f}")
+        lines.append("")
+        lines.append(item.get("text", "").strip())
+        lines.append("")
+
+    return "\n".join(lines).rstrip() + "\n"
+
 def normalize_slug(name: str) -> str:
     """
     Convert a name to a valid slug for repository names.
@@ -371,6 +396,8 @@ def build_service_fact_card() -> Dict[str, Any]:
             "list_assignments",
             "fetch_assignment",
             "infer_assignment_type",
+            "ingest_course_document",
+            "search_course_context",
             "create_github_repository",
             "generate_starter_files",
             "create_notion_page",
@@ -398,6 +425,7 @@ def build_service_fact_card() -> Dict[str, Any]:
             ],
             "tools_used": [
                 "CanvasTools",
+                "CourseContextTools",
                 "GitHubTools",
                 "NotionTools",
             ],
@@ -407,6 +435,9 @@ def build_service_fact_card() -> Dict[str, Any]:
                 "requires Notion credentials for writing assignment flow",
             ],
             "supported_languages": ["python", "r"],
+            "course_context_backend": "chroma",
+            "course_context_parser": "docling",
+            "supported_course_document_formats": ["pdf"],
             "notebook_support": "python notebook scaffolding for assignments that explicitly require Jupyter notebook submission",
         },
     )
@@ -473,6 +504,11 @@ def build_service_oasf_record(service_base_url: Optional[str] = None) -> Dict[st
             "capabilities_endpoint": f"{resolved_service_base_url}/capabilities",
             "coding_destination": "github",
             "create_endpoint": f"{resolved_service_base_url}/create",
+            "course_context_backend": "chroma",
+            "course_context_document_listing_endpoint": f"{resolved_service_base_url}/courses/{{course_id}}/documents",
+            "course_context_ingest_endpoint": f"{resolved_service_base_url}/courses/{{course_id}}/documents/ingest",
+            "course_context_parser": "docling",
+            "course_context_search_endpoint": f"{resolved_service_base_url}/courses/{{course_id}}/context/search",
             "entrypoint": "app/agent.py",
             "health_endpoint": f"{resolved_service_base_url}/health",
             "invocation_mode": "supports synchronous request-response and asynchronous task polling",
@@ -992,6 +1028,7 @@ def generate_starter_files(
     due_date: str,
     language: str = "python",
     short_description: str = "",
+    course_context: Optional[List[Dict[str, Any]]] = None,
 ) -> dict:
     """
     Generate starter files for an assignment.
@@ -1029,6 +1066,17 @@ def generate_starter_files(
         "## Due Date\n"
         f"{due_date}\n"
     )
+
+    if course_context:
+        files["COURSE_CONTEXT.md"] = build_course_context_markdown(course_context)
+        files["README.md"] = files["README.md"].rstrip() + (
+            "\n\n## Course Context\n"
+            "See `COURSE_CONTEXT.md` for relevant excerpts retrieved from your course materials.\n"
+        )
+        files["ASSIGNMENT.md"] = files["ASSIGNMENT.md"].rstrip() + (
+            "\n\n## Retrieved Course Context\n"
+            "See `COURSE_CONTEXT.md` for supporting excerpts from course reference material.\n"
+        )
 
     files.update(
         build_assignment_specific_files(
