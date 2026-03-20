@@ -63,13 +63,15 @@ ssh root@<LINODE_IP> "chown canvasagent:canvasagent /opt/canvas-github-agent/.en
 
 ## 4a) Create persistent Chroma storage
 
-Do not keep production Chroma data inside the git checkout. Put it on a durable path owned by the app user.
+The bootstrap script now creates `/var/lib/canvas-github-agent/chroma` automatically. Do not keep production Chroma data inside the git checkout.
+
+No extra command is required for the default path.
+
+If you want to use a different path, or if you attach a Linode Block Storage volume for course data, mount it first, create the directory, and point `COURSE_CONTEXT_CHROMA_PATH` at the mounted directory instead.
 
 ```bash
-ssh root@<LINODE_IP> 'mkdir -p /var/lib/canvas-github-agent/chroma && chown -R canvasagent:canvasagent /var/lib/canvas-github-agent'
+ssh root@<LINODE_IP> 'mkdir -p /mnt/course-data/chroma && chown -R canvasagent:canvasagent /mnt/course-data/chroma'
 ```
-
-If you attach a Linode Block Storage volume for course data, mount it first and point `COURSE_CONTEXT_CHROMA_PATH` at the mounted directory instead.
 
 ## 4b) Upload and ingest course documents
 

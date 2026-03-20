@@ -7,10 +7,12 @@ set -euo pipefail
 # Optional env vars:
 #   APP_DIR (default: /opt/canvas-github-agent)
 #   APP_USER (default: canvasagent)
+#   COURSE_CONTEXT_CHROMA_PATH (default: /var/lib/canvas-github-agent/chroma)
 
 REPO_URL="${REPO_URL:-}"
 APP_DIR="${APP_DIR:-/opt/canvas-github-agent}"
 APP_USER="${APP_USER:-canvasagent}"
+COURSE_CONTEXT_CHROMA_PATH="${COURSE_CONTEXT_CHROMA_PATH:-/var/lib/canvas-github-agent/chroma}"
 
 if [[ -z "$REPO_URL" ]]; then
   echo "REPO_URL is required. Example:"
@@ -43,6 +45,7 @@ if ! id -u "$APP_USER" >/dev/null 2>&1; then
 fi
 
 mkdir -p "$(dirname "$APP_DIR")"
+mkdir -p "$COURSE_CONTEXT_CHROMA_PATH"
 if [[ ! -d "$APP_DIR/.git" ]]; then
   git clone "$REPO_URL" "$APP_DIR"
 else
@@ -50,6 +53,7 @@ else
 fi
 
 chown -R "$APP_USER":"$APP_USER" "$APP_DIR"
+chown -R "$APP_USER":"$APP_USER" "$COURSE_CONTEXT_CHROMA_PATH"
 
 sudo -u "$APP_USER" bash -lc "
   set -euo pipefail
@@ -85,6 +89,7 @@ systemctl start canvas-github-agent-smoke.service
 echo "Bootstrap complete."
 echo "Next steps:"
 echo "1) Put secrets in $APP_DIR/.env"
-echo "2) For non-interactive servers, set CANVAS_USE_MCP=false in .env"
-echo "3) Test interactive mode: sudo -u $APP_USER $APP_DIR/.venv/bin/canvas-github-agent-cli"
-echo "4) Check smoke service: systemctl status canvas-github-agent-smoke.service"
+echo "2) Set COURSE_CONTEXT_CHROMA_PATH=$COURSE_CONTEXT_CHROMA_PATH in $APP_DIR/.env if you want the app to use the provisioned Chroma directory"
+echo "3) For non-interactive servers, set CANVAS_USE_MCP=false in .env"
+echo "4) Test interactive mode: sudo -u $APP_USER $APP_DIR/.venv/bin/canvas-github-agent-cli"
+echo "5) Check smoke service: systemctl status canvas-github-agent-smoke.service"
