@@ -83,6 +83,7 @@ canvas-github-agent create-repo --course-id 12345 --confirm-type
 
 - GET /courses
 - GET /courses/{course_id}/assignments
+- GET /metadata/oasf-record
 - POST /create
 
 ## Frontend
@@ -92,6 +93,8 @@ A Vite frontend is included under frontend/. See frontend/README.md.
 ## Agent Fact Card
 
 The required service fact card is stored at metadata/agent-fact-cards/service.canvas-assignment-workflow.fact-card.json.
+
+A minimal OASF 1.0.0-compatible service record is also stored at metadata/oasf-records/service.canvas-assignment-workflow.record.json.
 
 ## Future Enhancements
 

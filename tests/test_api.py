@@ -46,6 +46,32 @@ class StubAgentError:
         raise RuntimeError("sensitive github failure")
 
 
+def test_get_oasf_record_success(monkeypatch):
+    monkeypatch.setattr(
+        api,
+        "build_service_oasf_record",
+        lambda: {"name": "Canvas Assignment Workflow", "schema_version": "1.0.0"},
+    )
+    response = asyncio.run(_request("GET", "/metadata/oasf-record"))
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "name": "Canvas Assignment Workflow",
+        "schema_version": "1.0.0",
+    }
+
+
+def test_get_oasf_record_sanitizes_internal_errors(monkeypatch):
+    def _raise():
+        raise RuntimeError("sensitive oasf generation failure")
+
+    monkeypatch.setattr(api, "build_service_oasf_record", _raise)
+    response = asyncio.run(_request("GET", "/metadata/oasf-record"))
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Failed to build OASF record."
+
+
 def test_get_courses_success(monkeypatch):
     monkeypatch.setattr(api, "CanvasTools", StubCanvasTools)
     response = asyncio.run(_request("GET", "/courses"))

@@ -14,6 +14,7 @@ import pytest
 from scaffolding.templates import (
     assignment_mentions_jupyter_notebook,
     build_service_fact_card,
+    build_service_oasf_record,
     generate_starter_files,
     get_template_for_language,
     build_agent_fact_card,
@@ -140,6 +141,25 @@ class TestTemplates:
         assert checked_in == expected
         assert checked_in["name"] == "Canvas Assignment Workflow"
         assert checked_in["metadata"]["architecture"] == "deterministic workflow orchestrator"
+
+    def test_build_service_oasf_record_matches_checked_in_json(self):
+        """The checked-in OASF record should match the generated payload."""
+        expected = build_service_oasf_record()
+        record_path = (
+            Path(__file__).resolve().parent.parent
+            / "metadata"
+            / "oasf-records"
+            / "service.canvas-assignment-workflow.record.json"
+        )
+
+        with record_path.open("r", encoding="utf-8") as handle:
+            checked_in = json.load(handle)
+
+        assert checked_in == expected
+        assert checked_in["schema_version"] == "1.0.0"
+        assert checked_in["skills"][0]["name"] == "agent_orchestration/task_decomposition"
+        assert checked_in["skills"][0]["id"] == 1001
+        assert checked_in["locators"][0]["type"] == "source_code"
 
     def test_extract_required_filenames(self):
         """Extract explicit filenames from assignment instructions."""
