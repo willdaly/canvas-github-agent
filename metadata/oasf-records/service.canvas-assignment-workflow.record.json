@@ -50,11 +50,14 @@
     "create_endpoint": "http://localhost:8000/create",
     "entrypoint": "app/agent.py",
     "health_endpoint": "http://localhost:8000/health",
-    "invocation_mode": "synchronous request-response",
+    "invocation_mode": "supports synchronous request-response and asynchronous task polling",
     "notebook_support": "python notebook scaffolding when assignment text explicitly requires Jupyter notebook submission",
     "result_schema": "task_result_v1",
     "runtime": "python>=3.10",
     "supported_languages": "python,r",
+    "task_status_endpoint": "http://localhost:8000/tasks/{task_id}",
+    "task_status_schema": "task_status_v1",
+    "task_submission_endpoint": "http://localhost:8000/tasks",
     "writing_destination": "notion"
   }
 }
