@@ -15,6 +15,8 @@ from scaffolding.templates import (
     assignment_mentions_jupyter_notebook,
     build_service_fact_card,
     build_service_oasf_record,
+    infer_python_assignment_imports,
+    infer_python_assignment_requirements,
     generate_starter_files,
     get_template_for_language,
     build_agent_fact_card,
@@ -195,6 +197,46 @@ class TestTemplates:
         assert infer_python_notebook_imports(description) == ["from scipy.stats import beta"]
         assert infer_python_notebook_requirements(description) == ["scipy>=1.11.0"]
 
+    def test_infer_python_assignment_dependencies_from_library_mentions(self):
+        """Infer normal Python imports and requirements from assignment text."""
+        description = "Use pandas and matplotlib to analyze the CSV and plot the results."
+
+        assert infer_python_assignment_imports(description) == [
+            "import pandas as pd",
+            "import matplotlib.pyplot as plt",
+        ]
+        assert infer_python_assignment_requirements(description) == [
+            "pandas>=2.2.0",
+            "matplotlib>=3.8.0",
+        ]
+
+    def test_infer_python_assignment_prefers_explicit_import_lines(self):
+        """Preserve explicit import lines found directly in the assignment text."""
+        description = (
+            "Starter code should include import pandas as pd and from bs4 import BeautifulSoup."
+        )
+
+        assert infer_python_assignment_imports(description) == [
+            "import pandas as pd",
+            "from bs4 import BeautifulSoup",
+        ]
+
+    def test_python_project_adds_imports_and_requirements_from_assignment(self):
+        """Normal Python scaffolds should import libraries mentioned in the assignment."""
+        files = generate_starter_files(
+            assignment_name="Data Plotting",
+            assignment_description=(
+                "Use pandas to load the dataset and matplotlib to plot the results."
+            ),
+            due_date="2026-03-19",
+            language="python",
+        )
+
+        assert "import pandas as pd" in files["main.py"]
+        assert "import matplotlib.pyplot as plt" in files["main.py"]
+        assert "pandas>=2.2.0" in files["requirements.txt"]
+        assert "matplotlib>=3.8.0" in files["requirements.txt"]
+
     def test_extract_required_function_names(self):
         """Extract required function names from assignment examples."""
         text = (
@@ -298,6 +340,26 @@ class TestTemplates:
 
         assert len(code_cells) == 2
         assert "from scipy.stats import beta\n" in code_cells[0]["source"]
+        assert "scipy>=1.11.0" in files["requirements.txt"]
+
+    def test_python_notebook_combines_library_mentions_and_topic_imports(self):
+        """Notebook scaffolds should combine explicit library mentions with topic imports."""
+        files = generate_starter_files(
+            assignment_name="Bayes Data Notebook",
+            assignment_description=(
+                "Submission information: upload a Jupyter notebook. "
+                "Use pandas for the dataset and apply Bayes theorem to compute a posterior."
+            ),
+            due_date="2026-03-19",
+            language="python",
+        )
+
+        notebook = json.loads(files["main.ipynb"])
+        code_cells = [cell for cell in notebook["cells"] if cell["cell_type"] == "code"]
+
+        assert "import pandas as pd\n" in code_cells[0]["source"]
+        assert "from scipy.stats import beta\n" in code_cells[0]["source"]
+        assert "pandas>=2.2.0" in files["requirements.txt"]
         assert "scipy>=1.11.0" in files["requirements.txt"]
 
     def test_python_notebook_uses_explicit_filename(self):

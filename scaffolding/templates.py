@@ -246,6 +246,49 @@ PYTHON_NOTEBOOK_LIBRARY_RULES = [
     },
 ]
 
+PYTHON_LIBRARY_RULES = [
+    {
+        "patterns": [r"\bnumpy\b"],
+        "requirement": "numpy>=1.26.0",
+        "imports": ["import numpy as np"],
+    },
+    {
+        "patterns": [r"\bpandas\b"],
+        "requirement": "pandas>=2.2.0",
+        "imports": ["import pandas as pd"],
+    },
+    {
+        "patterns": [r"\bmatplotlib(?:\.pyplot)?\b", r"\bpyplot\b"],
+        "requirement": "matplotlib>=3.8.0",
+        "imports": ["import matplotlib.pyplot as plt"],
+    },
+    {
+        "patterns": [r"\bseaborn\b"],
+        "requirement": "seaborn>=0.13.0",
+        "imports": ["import seaborn as sns"],
+    },
+    {
+        "patterns": [r"\bscipy\b"],
+        "requirement": "scipy>=1.11.0",
+        "imports": ["import scipy"],
+    },
+    {
+        "patterns": [r"\bscikit-learn\b", r"\bsklearn\b"],
+        "requirement": "scikit-learn>=1.4.0",
+        "imports": ["import sklearn"],
+    },
+    {
+        "patterns": [r"\brequests\b"],
+        "requirement": "requests>=2.31.0",
+        "imports": ["import requests"],
+    },
+    {
+        "patterns": [r"\bbeautifulsoup4\b", r"\bbs4\b", r"\bbeautiful\s+soup\b"],
+        "requirement": "beautifulsoup4>=4.12.0",
+        "imports": ["from bs4 import BeautifulSoup"],
+    },
+]
+
 
 def get_template_for_language(language: str) -> dict:
     """
@@ -545,16 +588,90 @@ def infer_python_notebook_imports(assignment_description: str) -> List[str]:
     return imports
 
 
+def infer_python_assignment_requirements(assignment_description: str) -> List[str]:
+    """Infer Python package requirements from assignment text."""
+    if not assignment_description:
+        return []
+
+    text = assignment_description.lower()
+    requirements: List[str] = []
+    for rule in PYTHON_LIBRARY_RULES + PYTHON_NOTEBOOK_LIBRARY_RULES:
+        if any(re.search(pattern, text) for pattern in rule["patterns"]):
+            requirement = rule["requirement"]
+            if requirement not in requirements:
+                requirements.append(requirement)
+    return requirements
+
+
+def infer_python_assignment_imports(assignment_description: str) -> List[str]:
+    """Infer Python import lines from assignment text."""
+    if not assignment_description:
+        return []
+
+    imports: List[str] = []
+    seen = set()
+
+    for import_line in re.findall(
+        r"(?m)^\s*((?:from\s+[A-Za-z_][A-Za-z0-9_\.]*\s+import\s+[A-Za-z_*][A-Za-z0-9_,\s*]*)|(?:import\s+[A-Za-z_][A-Za-z0-9_\.]*\s*(?:as\s+[A-Za-z_][A-Za-z0-9_]*)?))\s*$",
+        assignment_description,
+    ):
+        cleaned = re.sub(r"\s+", " ", import_line.strip())
+        if cleaned and cleaned not in seen:
+            seen.add(cleaned)
+            imports.append(cleaned)
+
+    text = assignment_description.lower()
+    for rule in PYTHON_LIBRARY_RULES + PYTHON_NOTEBOOK_LIBRARY_RULES:
+        if any(re.search(pattern, text) for pattern in rule["patterns"]):
+            for import_line in rule["imports"]:
+                if import_line not in seen:
+                    seen.add(import_line)
+                    imports.append(import_line)
+    return imports
+
+
+def _inject_python_imports(source: str, import_lines: List[str]) -> str:
+    """Insert import lines after a module docstring, preserving existing content."""
+    if not import_lines:
+        return source
+
+    normalized_imports: List[str] = []
+    for import_line in import_lines:
+        cleaned = import_line.strip()
+        if cleaned and cleaned not in normalized_imports:
+            normalized_imports.append(cleaned)
+
+    if not normalized_imports:
+        return source
+
+    stripped = source.lstrip()
+    leading = source[: len(source) - len(stripped)]
+    docstring_match = re.match(r'(["\']{3}[\s\S]*?["\']{3}\n+)', stripped)
+    import_block = "\n".join(normalized_imports) + "\n\n"
+
+    if docstring_match:
+        docstring = docstring_match.group(1)
+        remainder = stripped[docstring_match.end():].lstrip("\n")
+        return f"{leading}{docstring}\n{import_block}{remainder}"
+
+    return f"{leading}{import_block}{stripped}"
+
+
 def _build_python_stub_file(
     assignment_name: str,
     assignment_summary: str,
     function_names: List[str],
+    import_lines: List[str],
     include_main: bool,
 ) -> str:
     blocks = [
         f'"""{assignment_name}\n\n{assignment_summary}\n"""',
         "",
     ]
+
+    if import_lines:
+        blocks.extend(import_lines)
+        blocks.append("")
 
     for function_name in function_names:
         blocks.append(
@@ -617,10 +734,17 @@ def _build_function_stub_file(
     assignment_summary: str,
     function_names: List[str],
     language: str,
+    import_lines: List[str],
     include_main: bool,
 ) -> str:
     if language in {"python", "py"}:
-        return _build_python_stub_file(assignment_name, assignment_summary, function_names, include_main)
+        return _build_python_stub_file(
+            assignment_name,
+            assignment_summary,
+            function_names,
+            import_lines,
+            include_main,
+        )
     return _build_r_stub_file(assignment_name, assignment_summary, function_names, include_main)
 
 
@@ -747,6 +871,7 @@ def build_assignment_specific_files(
     files: Dict[str, str] = {}
     requested_files = extract_required_filenames(assignment_description)
     requested_functions = extract_required_function_names(assignment_description)
+    inferred_python_imports = infer_python_assignment_imports(assignment_description)
     assignment_summary = (short_description or assignment_description[:200]).strip()
 
     requested_lower = {path.lower() for path in requested_files}
@@ -801,7 +926,7 @@ def build_assignment_specific_files(
         )
 
     if language_lower in {"python", "py"} and assignment_mentions_jupyter_notebook(assignment_description):
-        notebook_imports = infer_python_notebook_imports(assignment_description)
+        notebook_imports = inferred_python_imports
         notebook_target = _select_notebook_target(requested_files)
         files[notebook_target] = _build_python_notebook_file(
             assignment_name=assignment_name,
@@ -811,7 +936,7 @@ def build_assignment_specific_files(
         )
         files["requirements.txt"] = _extend_python_requirements(
             files.get("requirements.txt", PYTHON_TEMPLATES["requirements.txt"]),
-            infer_python_notebook_requirements(assignment_description),
+            infer_python_assignment_requirements(assignment_description),
         )
 
     if requested_functions:
@@ -823,6 +948,7 @@ def build_assignment_specific_files(
                 assignment_summary=assignment_summary,
                 function_names=requested_functions,
                 language=language_lower,
+                import_lines=inferred_python_imports,
                 include_main=include_main,
             )
 
@@ -881,5 +1007,21 @@ def generate_starter_files(
             short_description=short_description,
         )
     )
+
+    if language.lower() in {"python", "py"}:
+        inferred_imports = infer_python_assignment_imports(assignment_description)
+        inferred_requirements = infer_python_assignment_requirements(assignment_description)
+
+        python_targets = [
+            path for path in files
+            if path.endswith(".py") and not path.lower().startswith("tests/")
+        ]
+        for path in python_targets:
+            files[path] = _inject_python_imports(files[path], inferred_imports)
+
+        files["requirements.txt"] = _extend_python_requirements(
+            files.get("requirements.txt", PYTHON_TEMPLATES["requirements.txt"]),
+            inferred_requirements,
+        )
     
     return files
