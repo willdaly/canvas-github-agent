@@ -23,8 +23,31 @@ class StubAgentSuccess:
     async def run(self, **kwargs):
         return {
             "destination": "github",
+            "assignment": {
+                "id": kwargs.get("assignment_id") or 777,
+                "name": "Homework 1",
+                "due_at": "2026-03-30T12:00:00Z",
+                "workflow_state": "unsubmitted",
+                "is_completed": False,
+            },
             "repository": {"html_url": "https://example.com/repo"},
-            "request": kwargs,
+            "files_created": ["README.md", "main.py"],
+            "files_uploaded": True,
+        }
+
+
+class StubWritingAgentSuccess:
+    async def run(self, **kwargs):
+        return {
+            "destination": "notion",
+            "assignment": {
+                "id": kwargs.get("assignment_id") or 555,
+                "name": "Essay Draft",
+                "due_at": "2026-03-31T12:00:00Z",
+                "workflow_state": "unsubmitted",
+                "is_completed": False,
+            },
+            "page": {"id": "page_123", "url": "https://notion.so/page_123"},
         }
 
 
@@ -50,7 +73,7 @@ def test_get_oasf_record_success(monkeypatch):
     monkeypatch.setattr(
         api,
         "build_service_oasf_record",
-        lambda: {"name": "Canvas Assignment Workflow", "schema_version": "1.0.0"},
+        lambda *args, **kwargs: {"name": "Canvas Assignment Workflow", "schema_version": "1.0.0"},
     )
     response = asyncio.run(_request("GET", "/metadata/oasf-record"))
 
@@ -61,8 +84,30 @@ def test_get_oasf_record_success(monkeypatch):
     }
 
 
+def test_get_health_success():
+    response = asyncio.run(_request("GET", "/health"))
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+        "service": "canvas-assignment-workflow",
+        "version": "0.1.0",
+    }
+
+
+def test_get_capabilities_success(monkeypatch):
+    monkeypatch.setattr(api, "get_service_base_url", lambda: "https://agent.example.com")
+    response = asyncio.run(_request("GET", "/capabilities"))
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["service"]["base_url"] == "https://agent.example.com"
+    assert payload["result_schema"]["name"] == "task_result_v1"
+    assert payload["operations"][0]["name"] == "list_courses"
+
+
 def test_get_oasf_record_sanitizes_internal_errors(monkeypatch):
-    def _raise():
+    def _raise(*args, **kwargs):
         raise RuntimeError("sensitive oasf generation failure")
 
     monkeypatch.setattr(api, "build_service_oasf_record", _raise)
@@ -107,13 +152,18 @@ def test_create_success(monkeypatch):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["destination"] == "github"
-    assert payload["repository"]["html_url"] == "https://example.com/repo"
+    assert payload["status"] == "completed"
+    assert payload["service"]["slug"] == "canvas-assignment-workflow"
+    assert payload["route"]["destination"] == "github"
+    assert payload["route"]["assignment_type"] == "coding"
+    assert payload["artifacts"][0]["url"] == "https://example.com/repo"
     assert payload["request"]["course_id"] == 123
+    assert payload["assignment"]["name"] == "Homework 1"
+    assert payload["details"]["files_uploaded"] is True
 
 
 def test_create_passes_notion_content_mode(monkeypatch):
-    monkeypatch.setattr(api, "CanvasGitHubAgent", StubAgentSuccess)
+    monkeypatch.setattr(api, "CanvasGitHubAgent", StubWritingAgentSuccess)
     response = asyncio.run(
         _request(
             "POST",
@@ -129,6 +179,10 @@ def test_create_passes_notion_content_mode(monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert payload["request"]["notion_content_mode"] == "text"
+    assert payload["route"]["destination"] == "notion"
+    assert payload["route"]["assignment_type"] == "writing"
+    assert payload["route"]["notion_content_mode"] == "text"
+    assert payload["artifacts"][0]["kind"] == "notion_page"
 
 
 def test_create_returns_400_when_agent_returns_none(monkeypatch):

@@ -53,6 +53,7 @@ Set values in .env:
 - NOTION_TOKEN
 - NOTION_PARENT_PAGE_ID
 - FRONTEND_ORIGINS
+- SERVICE_BASE_URL (optional; defaults to `http://localhost:8000`)
 
 Notes:
 
@@ -81,10 +82,14 @@ canvas-github-agent create-repo --course-id 12345 --confirm-type
 
 ## API Endpoints
 
+- GET /health
+- GET /capabilities
 - GET /courses
 - GET /courses/{course_id}/assignments
 - GET /metadata/oasf-record
 - POST /create
+
+The `/create` endpoint returns a stable `task_result_v1` payload with service, request, route, assignment, artifacts, and details fields.
 
 ## Frontend
 
