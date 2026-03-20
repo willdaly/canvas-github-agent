@@ -74,6 +74,7 @@ canvas-github-agent list-courses
 canvas-github-agent list-assignments --course-id 12345
 canvas-github-agent create-repo --course-id 12345
 canvas-github-agent create-repo --course-id 12345 --assignment-id 67890
+canvas-github-agent create-repo --course-id 12345 --language r
 canvas-github-agent create-repo --course-id 12345 --assignment-type writing
 canvas-github-agent create-repo --course-id 12345 --confirm-type
 ```

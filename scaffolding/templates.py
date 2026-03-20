@@ -164,7 +164,7 @@ env/
 """
 }
 
-JAVA_TEMPLATES = {
+R_TEMPLATES = {
     "README.md": """# {assignment_name}
 
 ## Overview
@@ -177,224 +177,44 @@ See `ASSIGNMENT.md` for the complete assignment brief.
 {due_date}
 
 ## Setup
-Ensure you have Java 11+ installed.
-
-## Building
-```bash
-javac Main.java
-```
+Ensure you have R installed.
 
 ## Running
 ```bash
-java Main
+Rscript main.R
 ```
 
 ## Testing
 ```bash
-javac -cp .:junit-platform-console-standalone.jar Test.java
-java -jar junit-platform-console-standalone.jar --class-path . --scan-class-path
+Rscript tests/test_main.R
 ```
 
 ## Submission
-Complete the implementation in `Main.java` and ensure all tests pass.
+Complete the implementation in `main.R` and ensure all tests pass.
 """,
-    "Main.java": """/**
- * {assignment_name}
- * 
- * {assignment_description}
- */
-public class Main {{
-    public static void main(String[] args) {{
-        // TODO: Implement your solution here
-        System.out.println("Hello, World!");
-    }}
-}}
-""",
-    "Test.java": """import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
+    "main.R": """# {assignment_name}
+#
+# {assignment_description}
 
-/**
- * Tests for {assignment_name}
- */
-public class Test {{
-    @Test
-    public void testMain() {{
-        // TODO: Add your test cases here
-        assertTrue(true);
-    }}
-}}
-""",
-    ".gitignore": """# Java
-*.class
-*.jar
-*.war
-*.ear
-target/
-build/
-.gradle/
-.idea/
-*.iml
-"""
-}
-
-JAVASCRIPT_TEMPLATES = {
-    "README.md": """# {assignment_name}
-
-## Overview
-This repository contains starter code for this assignment.
-
-## Full Assignment
-See `ASSIGNMENT.md` for the complete assignment brief.
-
-## Due Date
-{due_date}
-
-## Setup
-```bash
-npm install
-```
-
-## Running Tests
-```bash
-npm test
-```
-
-## Running the Application
-```bash
-npm start
-```
-
-## Submission
-Complete the implementation in `index.js` and ensure all tests pass.
-""",
-    "package.json": """{{
-  "name": "{assignment_slug}",
-  "version": "1.0.0",
-  "description": "{assignment_description}",
-  "main": "index.js",
-  "scripts": {{
-    "test": "jest",
-    "start": "node index.js"
-  }},
-  "devDependencies": {{
-    "jest": "^29.0.0"
-  }}
-}}
-""",
-    "index.js": """/**
- * {assignment_name}
- * 
- * {assignment_description}
- */
-
-function main() {{
-  // TODO: Implement your solution here
-  console.log('Hello, World!');
+main <- function() {{
+  invisible(NULL)
 }}
 
-if (require.main === module) {{
-  main();
-}}
-
-module.exports = {{ main }};
-""",
-    "index.test.js": """/**
- * Tests for {assignment_name}
- */
-const {{ main }} = require('./index');
-
-describe('{assignment_name}', () => {{
-  test('main function exists', () => {{
-    expect(main).toBeDefined();
-  }});
-  
-  // TODO: Add your test cases here
-}});
-""",
-    ".gitignore": """# Node
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.env
-.DS_Store
-coverage/
-dist/
-"""
-}
-
-CPP_TEMPLATES = {
-    "README.md": """# {assignment_name}
-
-## Overview
-This repository contains starter code for this assignment.
-
-## Full Assignment
-See `ASSIGNMENT.md` for the complete assignment brief.
-
-## Due Date
-{due_date}
-
-## Setup
-Ensure you have a C++ compiler (g++ or clang++) installed.
-
-## Building
-```bash
-g++ -std=c++17 main.cpp -o main
-```
-
-## Running
-```bash
-./main
-```
-
-## Testing
-```bash
-g++ -std=c++17 test.cpp -o test
-./test
-```
-
-## Submission
-Complete the implementation in `main.cpp` and ensure all tests pass.
-""",
-    "main.cpp": """/**
- * {assignment_name}
- * 
- * {assignment_description}
- */
-#include <iostream>
-
-int main() {{
-    // TODO: Implement your solution here
-    std::cout << "Hello, World!" << std::endl;
-    return 0;
+if (sys.nframe() == 0) {{
+  main()
 }}
 """,
-    "test.cpp": """/**
- * Tests for {assignment_name}
- */
-#include <cassert>
-#include <iostream>
+    "tests/test_main.R": """source("main.R")
 
-void test_main() {{
-    // TODO: Add your test cases here
-    assert(true);
-    std::cout << "All tests passed!" << std::endl;
-}}
-
-int main() {{
-    test_main();
-    return 0;
-}}
+stopifnot(exists("main"))
+stopifnot(is.function(main))
 """,
-    ".gitignore": """# C++
-*.o
-*.exe
-*.out
-main
-test
-.vscode/
-.idea/
+    ".gitignore": """# R
+.Rhistory
+.RData
+.Rproj.user/
+.Ruserdata
+renv/library/
 """
 }
 
@@ -402,12 +222,15 @@ test
 TEMPLATE_MAP = {
     "python": PYTHON_TEMPLATES,
     "py": PYTHON_TEMPLATES,
-    "java": JAVA_TEMPLATES,
-    "javascript": JAVASCRIPT_TEMPLATES,
-    "js": JAVASCRIPT_TEMPLATES,
-    "node": JAVASCRIPT_TEMPLATES,
-    "cpp": CPP_TEMPLATES,
-    "c++": CPP_TEMPLATES,
+    "r": R_TEMPLATES,
+    "rscript": R_TEMPLATES,
+}
+
+SOURCE_FILE_BY_LANGUAGE = {
+    "python": "main.py",
+    "py": "main.py",
+    "r": "main.R",
+    "rscript": "main.R",
 }
 
 
@@ -427,7 +250,7 @@ def get_template_for_language(language: str) -> dict:
     if language_lower in TEMPLATE_MAP:
         return TEMPLATE_MAP[language_lower]
     
-    # Then try partial match, but prioritize longer keys to avoid "java" matching "javascript"
+    # Then try partial matches, prioritizing longer keys first.
     sorted_keys = sorted(TEMPLATE_MAP.keys(), key=len, reverse=True)
     for key in sorted_keys:
         if key in language_lower:
@@ -496,7 +319,7 @@ def extract_required_filenames(assignment_description: str) -> List[str]:
 
     common_ext_pattern = (
         r"\b([A-Za-z0-9_./-]+\."
-        r"(?:py|txt|md|json|ya?ml|csv|java|js|cpp|cxx|cc|h|hpp))\b"
+        r"(?:py|r|rmd|txt|md|json|ya?ml|csv))\b"
     )
     for match in re.findall(common_ext_pattern, text, flags=re.IGNORECASE):
         filenames.append(match.strip())
@@ -516,14 +339,35 @@ def extract_required_function_names(assignment_description: str) -> List[str]:
     if not assignment_description:
         return []
 
-    names = re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", assignment_description)
+    candidates: List[str] = []
+
+    candidates.extend(
+        re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", assignment_description)
+    )
+    candidates.extend(
+        re.findall(r"`([A-Za-z_][A-Za-z0-9_]*)`", assignment_description)
+    )
+
+    phrase_patterns = [
+        r"function names?\s*:\s*([^\.\n]+)",
+        r"functions?\s+(?:named|called)\s+([^\.\n]+)",
+        r"implement\s+(?:the\s+)?functions?\s+([^\.\n]+)",
+    ]
+    for pattern in phrase_patterns:
+        for block in re.findall(pattern, assignment_description, flags=re.IGNORECASE):
+            candidates.extend(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", block))
+
     filtered = []
     seen = set()
-    for name in names:
+    ignored = {
+        "and", "called", "function", "functions", "implement", "main",
+        "named", "or", "print", "solution", "the",
+    }
+    for name in candidates:
         lower = name.lower()
         if name.startswith("__"):
             continue
-        if lower in {"solution", "print", "main"}:
+        if lower in ignored:
             continue
         if name not in seen:
             seen.add(name)
@@ -531,22 +375,118 @@ def extract_required_function_names(assignment_description: str) -> List[str]:
     return filtered
 
 
+def _build_python_stub_file(
+    assignment_name: str,
+    assignment_summary: str,
+    function_names: List[str],
+    include_main: bool,
+) -> str:
+    blocks = [
+        f'"""{assignment_name}\n\n{assignment_summary}\n"""',
+        "",
+    ]
+
+    for function_name in function_names:
+        blocks.append(
+            f"def {function_name}():\n"
+            f"    \"\"\"TODO: implement {function_name}.\"\"\"\n"
+            "    raise NotImplementedError\n"
+        )
+
+    if include_main:
+        blocks.append(
+            "def main():\n"
+            "    \"\"\"Main function - implement your solution here.\"\"\"\n"
+            "    pass\n"
+        )
+        blocks.append(
+            'if __name__ == "__main__":\n'
+            "    main()\n"
+        )
+
+    return "\n".join(blocks).strip() + "\n"
+
+
+def _build_r_stub_file(
+    assignment_name: str,
+    assignment_summary: str,
+    function_names: List[str],
+    include_main: bool,
+) -> str:
+    blocks = [
+        f"# {assignment_name}",
+        "#",
+        f"# {assignment_summary}",
+        "",
+    ]
+
+    for function_name in function_names:
+        blocks.append(
+            f"{function_name} <- function() {{\n"
+            f"  stop(\"TODO: implement {function_name}\")\n"
+            "}\n"
+        )
+
+    if include_main:
+        blocks.append(
+            "main <- function() {\n"
+            "  invisible(NULL)\n"
+            "}\n"
+        )
+        blocks.append(
+            "if (sys.nframe() == 0) {\n"
+            "  main()\n"
+            "}\n"
+        )
+
+    return "\n".join(blocks).strip() + "\n"
+
+
+def _build_function_stub_file(
+    assignment_name: str,
+    assignment_summary: str,
+    function_names: List[str],
+    language: str,
+    include_main: bool,
+) -> str:
+    if language in {"python", "py"}:
+        return _build_python_stub_file(assignment_name, assignment_summary, function_names, include_main)
+    return _build_r_stub_file(assignment_name, assignment_summary, function_names, include_main)
+
+
+def _select_function_stub_target(language: str, requested_files: List[str]) -> str:
+    default_target = SOURCE_FILE_BY_LANGUAGE.get(language, "main.py")
+    source_extensions = {"python": ".py", "py": ".py", "r": ".R", "rscript": ".R"}
+    source_extension = source_extensions.get(language, ".py")
+
+    source_files = [
+        path for path in requested_files
+        if path.endswith(source_extension) and not path.lower().startswith("tests/")
+    ]
+    if len(source_files) == 1:
+        return source_files[0]
+    return default_target
+
+
 def build_assignment_specific_files(
     assignment_name: str,
     assignment_description: str,
     language: str,
+    short_description: str = "",
 ) -> Dict[str, str]:
     """Generate files that are explicitly requested by assignment instructions."""
-    if language.lower() not in {"python", "py"}:
+    language_lower = language.lower()
+    if language_lower not in {"python", "py", "r", "rscript"}:
         return {}
 
     files: Dict[str, str] = {}
     requested_files = extract_required_filenames(assignment_description)
     requested_functions = extract_required_function_names(assignment_description)
+    assignment_summary = (short_description or assignment_description[:200]).strip()
 
     requested_lower = {path.lower() for path in requested_files}
 
-    if "maze_solvers.py" in requested_lower:
+    if language_lower in {"python", "py"} and "maze_solvers.py" in requested_lower:
         maze_functions = [
             name for name in requested_functions
             if name.startswith("maze_solver_") or name in {
@@ -594,6 +534,18 @@ def build_assignment_specific_files(
             "## Maze Variations and Performance Impact\n\n"
             "## Real-life Application\n"
         )
+
+    if requested_functions:
+        target_file = _select_function_stub_target(language_lower, requested_files)
+        if target_file.lower() != "maze_solvers.py":
+            include_main = target_file == SOURCE_FILE_BY_LANGUAGE.get(language_lower)
+            files[target_file] = _build_function_stub_file(
+                assignment_name=assignment_name,
+                assignment_summary=assignment_summary,
+                function_names=requested_functions,
+                language=language_lower,
+                include_main=include_main,
+            )
 
     return files
 
@@ -647,6 +599,7 @@ def generate_starter_files(
             assignment_name=assignment_name,
             assignment_description=assignment_description,
             language=language,
+            short_description=short_description,
         )
     )
     

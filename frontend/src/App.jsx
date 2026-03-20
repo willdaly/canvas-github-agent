@@ -258,7 +258,7 @@ export default function App() {
                   onChange={e => setLanguage(e.target.value)}
                   style={{ background: "#1e293b", border: "1px solid #334155", color: "#e2e8f0", padding: "8px 12px", borderRadius: 8, fontSize: 14 }}
                 >
-                  {["python", "java", "javascript", "cpp"].map(l => <option key={l}>{l}</option>)}
+                  {["python", "r"].map(l => <option key={l}>{l}</option>)}
                 </select>
               </div>
             )}

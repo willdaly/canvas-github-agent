@@ -43,16 +43,12 @@ async def interactive_mode():
     # Get language preference
     print("\nAvailable languages:")
     print("  1. Python (default)")
-    print("  2. Java")
-    print("  3. JavaScript")
-    print("  4. C++")
+    print("  2. R")
     
-    lang_input = input("\nSelect language (1-4 or press Enter for Python): ").strip()
+    lang_input = input("\nSelect language (1-2 or press Enter for Python): ").strip()
     language_map = {
         "1": "python",
-        "2": "java",
-        "3": "javascript",
-        "4": "cpp",
+        "2": "r",
         "": "python"
     }
     language = language_map.get(lang_input, "python")

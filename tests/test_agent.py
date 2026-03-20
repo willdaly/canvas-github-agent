@@ -17,9 +17,7 @@ from scaffolding.templates import (
     extract_required_function_names,
     normalize_slug,
     PYTHON_TEMPLATES,
-    JAVA_TEMPLATES,
-    JAVASCRIPT_TEMPLATES,
-    CPP_TEMPLATES
+    R_TEMPLATES,
 )
 
 
@@ -31,28 +29,13 @@ class TestTemplates:
         template = get_template_for_language("python")
         assert template == PYTHON_TEMPLATES
         
-    def test_get_template_for_java(self):
-        """Test getting Java template."""
-        template = get_template_for_language("java")
-        assert template == JAVA_TEMPLATES
-        
-    def test_get_template_for_javascript(self):
-        """Test getting JavaScript template."""
-        template = get_template_for_language("javascript")
-        assert template == JAVASCRIPT_TEMPLATES
-        
-        # Test alias
-        template = get_template_for_language("js")
-        assert template == JAVASCRIPT_TEMPLATES
-        
-    def test_get_template_for_cpp(self):
-        """Test getting C++ template."""
-        template = get_template_for_language("cpp")
-        assert template == CPP_TEMPLATES
-        
-        # Test alias
-        template = get_template_for_language("c++")
-        assert template == CPP_TEMPLATES
+    def test_get_template_for_r(self):
+        """Test getting R template."""
+        template = get_template_for_language("r")
+        assert template == R_TEMPLATES
+
+        template = get_template_for_language("rscript")
+        assert template == R_TEMPLATES
         
     def test_get_template_default_to_python(self):
         """Test that unknown languages default to Python."""
@@ -82,69 +65,22 @@ class TestTemplates:
         assert "This is a test assignment" in files["ASSIGNMENT.md"]
         assert "This is a test assignment" in files["main.py"]
         
-    def test_generate_starter_files_java(self):
-        """Test generating Java starter files."""
+    def test_generate_starter_files_r(self):
+        """Test generating R starter files."""
         files = generate_starter_files(
-            assignment_name="Java Assignment",
-            assignment_description="Java test",
+            assignment_name="R Assignment",
+            assignment_description="R test",
             due_date="2024-12-31",
-            language="java"
+            language="r"
         )
-        
+
         assert "README.md" in files
         assert "ASSIGNMENT.md" in files
-        assert "Main.java" in files
-        assert "Test.java" in files
+        assert "main.R" in files
+        assert "tests/test_main.R" in files
         assert ".gitignore" in files
-        
-        assert "Java Assignment" in files["Main.java"]
-        
-    def test_generate_starter_files_javascript(self):
-        """Test generating JavaScript starter files."""
-        files = generate_starter_files(
-            assignment_name="JS Assignment",
-            assignment_description="JavaScript test",
-            due_date="2024-12-31",
-            language="javascript"
-        )
-        
-        assert "README.md" in files
-        assert "ASSIGNMENT.md" in files
-        assert "package.json" in files
-        assert "index.js" in files
-        assert "index.test.js" in files
-        assert ".gitignore" in files
-        
-        assert "JS Assignment" in files["index.js"]
-        
-    def test_generate_starter_files_cpp(self):
-        """Test generating C++ starter files."""
-        files = generate_starter_files(
-            assignment_name="CPP Assignment",
-            assignment_description="C++ test",
-            due_date="2024-12-31",
-            language="cpp"
-        )
-        
-        assert "README.md" in files
-        assert "ASSIGNMENT.md" in files
-        assert "main.cpp" in files
-        assert "test.cpp" in files
-        assert ".gitignore" in files
-        
-        assert "CPP Assignment" in files["main.cpp"]
-        
-    def test_assignment_slug_generation(self):
-        """Test that assignment names are properly converted to slugs."""
-        files = generate_starter_files(
-            assignment_name="My Test Assignment!",
-            assignment_description="Test",
-            due_date="2024-12-31",
-            language="javascript"
-        )
-        
-        # Check that the slug is used in package.json
-        assert "my-test-assignment" in files["package.json"]
+
+        assert "R Assignment" in files["main.R"]
     
     def test_normalize_slug_basic(self):
         """Test basic slug normalization."""
@@ -202,6 +138,8 @@ class TestTemplates:
         )
         function_names = extract_required_function_names(text)
         assert "maze_solver_one" in function_names
+        assert "maze_solver_two" in function_names
+        assert "maze_solver_three" in function_names
 
     def test_assignment_specific_scaffold_files(self):
         """Generate requested files and solver stubs from assignment brief."""
@@ -225,6 +163,39 @@ class TestTemplates:
         assert "def maze_solver_three(maze):" in files["maze_solvers.py"]
         assert "maze.txt" in files
         assert "Report.md" in files
+
+    def test_python_function_stubs_default_to_main(self):
+        """Create Python function stubs in main.py when no source file is named."""
+        files = generate_starter_files(
+            assignment_name="Stats Functions",
+            assignment_description=(
+                "Implement the functions normalize_scores, summarize_results, "
+                "and plot_summary."
+            ),
+            due_date="2026-03-19",
+            language="python",
+        )
+
+        assert "def normalize_scores():" in files["main.py"]
+        assert "def summarize_results():" in files["main.py"]
+        assert "def plot_summary():" in files["main.py"]
+
+    def test_r_function_stubs_use_named_source_file(self):
+        """Create R function stubs in an explicitly requested R file."""
+        files = generate_starter_files(
+            assignment_name="Data Analysis",
+            assignment_description=(
+                "Include a file named analysis.R. "
+                "The functions called clean_data and build_plot should be defined there."
+            ),
+            due_date="2026-03-19",
+            language="r",
+        )
+
+        assert "analysis.R" in files
+        assert "clean_data <- function()" in files["analysis.R"]
+        assert "build_plot <- function()" in files["analysis.R"]
+        assert "main <- function()" not in files["analysis.R"]
 
 
 class TestCanvasTools:
