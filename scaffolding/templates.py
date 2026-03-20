@@ -1,6 +1,7 @@
 """
 Starter code templates for different types of assignments.
 """
+import json
 import re
 from html import unescape
 from typing import Any, Dict, List, Optional
@@ -319,7 +320,7 @@ def extract_required_filenames(assignment_description: str) -> List[str]:
 
     common_ext_pattern = (
         r"\b([A-Za-z0-9_./-]+\."
-        r"(?:py|r|rmd|txt|md|json|ya?ml|csv))\b"
+        r"(?:py|ipynb|r|rmd|txt|md|json|ya?ml|csv))\b"
     )
     for match in re.findall(common_ext_pattern, text, flags=re.IGNORECASE):
         filenames.append(match.strip())
@@ -373,6 +374,21 @@ def extract_required_function_names(assignment_description: str) -> List[str]:
             seen.add(name)
             filtered.append(name)
     return filtered
+
+
+def assignment_mentions_jupyter_notebook(assignment_description: str) -> bool:
+    """Return True when the assignment explicitly calls for a Jupyter notebook."""
+    if not assignment_description:
+        return False
+
+    text = assignment_description.lower()
+    patterns = [
+        r"jupyter\s+notebook",
+        r"\.ipynb\b",
+        r"(?:submission|submit|upload)[^\.\n]{0,80}\bnotebook\b",
+        r"\bnotebook\b[^\.\n]{0,80}(?:submission|submit|upload)",
+    ]
+    return any(re.search(pattern, text) for pattern in patterns)
 
 
 def _build_python_stub_file(
@@ -454,6 +470,68 @@ def _build_function_stub_file(
     return _build_r_stub_file(assignment_name, assignment_summary, function_names, include_main)
 
 
+def _build_python_notebook_file(
+    assignment_name: str,
+    assignment_summary: str,
+    function_names: List[str],
+) -> str:
+    code_lines = [
+        f'"""{assignment_name}"""',
+        "",
+    ]
+
+    for function_name in function_names:
+        code_lines.extend([
+            f"def {function_name}():",
+            f'    """TODO: implement {function_name}."""',
+            "    raise NotImplementedError",
+            "",
+        ])
+
+    code_lines.extend([
+        "def main():",
+        '    """Main function - implement your solution here."""',
+        "    pass",
+        "",
+        'if __name__ == "__main__":',
+        "    main()",
+    ])
+
+    notebook = {
+        "cells": [
+            {
+                "cell_type": "markdown",
+                "metadata": {"language": "markdown"},
+                "source": [
+                    f"# {assignment_name}\n",
+                    "\n",
+                    f"{assignment_summary}\n",
+                ],
+            },
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {"language": "python"},
+                "outputs": [],
+                "source": [f"{line}\n" for line in code_lines],
+            },
+        ],
+        "metadata": {
+            "kernelspec": {
+                "display_name": "Python 3",
+                "language": "python",
+                "name": "python3",
+            },
+            "language_info": {
+                "name": "python",
+            },
+        },
+        "nbformat": 4,
+        "nbformat_minor": 5,
+    }
+    return json.dumps(notebook, indent=2) + "\n"
+
+
 def _select_function_stub_target(language: str, requested_files: List[str]) -> str:
     default_target = SOURCE_FILE_BY_LANGUAGE.get(language, "main.py")
     source_extensions = {"python": ".py", "py": ".py", "r": ".R", "rscript": ".R"}
@@ -466,6 +544,13 @@ def _select_function_stub_target(language: str, requested_files: List[str]) -> s
     if len(source_files) == 1:
         return source_files[0]
     return default_target
+
+
+def _select_notebook_target(requested_files: List[str]) -> str:
+    notebook_files = [path for path in requested_files if path.lower().endswith(".ipynb")]
+    if len(notebook_files) == 1:
+        return notebook_files[0]
+    return "main.ipynb"
 
 
 def build_assignment_specific_files(
@@ -533,6 +618,14 @@ def build_assignment_specific_files(
             "## Optimality, Time, and Space Analysis\n\n"
             "## Maze Variations and Performance Impact\n\n"
             "## Real-life Application\n"
+        )
+
+    if language_lower in {"python", "py"} and assignment_mentions_jupyter_notebook(assignment_description):
+        notebook_target = _select_notebook_target(requested_files)
+        files[notebook_target] = _build_python_notebook_file(
+            assignment_name=assignment_name,
+            assignment_summary=assignment_summary,
+            function_names=requested_functions,
         )
 
     if requested_functions:
