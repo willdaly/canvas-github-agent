@@ -66,6 +66,7 @@ Notes:
 - CANVAS_USE_MCP=true uses the Smithery-hosted Canvas MCP server.
 - CANVAS_USE_MCP=false uses direct Canvas REST calls and is recommended for headless server deployments.
 - CANVAS_MODULE_CACHE_TTL_SECONDS controls lightweight in-process caching for Canvas module lookups to reduce repeated API requests.
+- When Canvas responses include `updated_at`-style metadata, cached module-item content is versioned by that revision data so content refreshes can bypass the TTL cache earlier.
 
 ## Usage
 

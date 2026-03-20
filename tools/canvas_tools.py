@@ -19,6 +19,13 @@ class CanvasTools:
     """Tools for interacting with Canvas LMS via the Smithery Canvas MCP server."""
 
     _shared_cache: dict[str, tuple[float, Any]] = {}
+    _revision_fields = (
+        "updated_at",
+        "modified_at",
+        "published_at",
+        "created_at",
+        "unlock_at",
+    )
     
     def __init__(self):
         self.canvas_url = os.getenv("CANVAS_API_URL", "https://canvas.instructure.com")
@@ -38,6 +45,27 @@ class CanvasTools:
 
     def _cache_key(self, *parts: Any) -> str:
         return "::".join(str(part) for part in (self.canvas_url.rstrip("/"), *parts))
+
+    @classmethod
+    def _resource_revision(cls, *resources: Any) -> Optional[str]:
+        revision_parts: list[str] = []
+        for resource in resources:
+            if not isinstance(resource, dict):
+                continue
+            for field in cls._revision_fields:
+                value = resource.get(field)
+                if value:
+                    revision_parts.append(f"{field}={value}")
+
+        if not revision_parts:
+            return None
+
+        return "|".join(dict.fromkeys(revision_parts))
+
+    def _cache_key_for_revision(self, *parts: Any, revision: Optional[str] = None) -> str:
+        if revision:
+            return self._cache_key(*parts, "rev", revision)
+        return self._cache_key(*parts)
 
     def _cache_get(self, key: str) -> Any:
         if self.module_cache_ttl_seconds <= 0:
@@ -78,6 +106,7 @@ class CanvasTools:
             "name": assignment.get("name", "Untitled Assignment"),
             "description": assignment.get("description", ""),
             "due_at": assignment.get("due_at"),
+            "updated_at": assignment.get("updated_at"),
             "has_submitted_submissions": bool(assignment.get("has_submitted_submissions")),
             "submission": submission or None,
             "submitted_at": submitted_at,
@@ -112,6 +141,8 @@ class CanvasTools:
             "id": item.get("id"),
             "title": item.get("title") or item.get("page_url") or item.get("type", "Module Item"),
             "type": item.get("type", "Unknown"),
+            "updated_at": item.get("updated_at"),
+            "published_at": item.get("published_at"),
             "content_id": item.get("content_id"),
             "page_url": item.get("page_url"),
             "html_url": item.get("html_url"),
@@ -124,6 +155,9 @@ class CanvasTools:
             "id": module.get("id"),
             "name": module.get("name") or f"Module {module.get('id', '')}".strip(),
             "position": module.get("position"),
+            "updated_at": module.get("updated_at"),
+            "published_at": module.get("published_at"),
+            "unlock_at": module.get("unlock_at"),
             "items": [self._normalize_module_item(item) for item in module.get("items", [])],
         }
 
@@ -146,8 +180,13 @@ class CanvasTools:
             [self._normalize_module(module) for module in modules],
         )
 
-    def _direct_get_assignment(self, course_id: int, assignment_id: int) -> Dict[str, Any]:
-        cache_key = self._cache_key("assignment", course_id, assignment_id)
+    def _direct_get_assignment(
+        self,
+        course_id: int,
+        assignment_id: int,
+        revision: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        cache_key = self._cache_key_for_revision("assignment", course_id, assignment_id, revision=revision)
         cached = self._cache_get(cache_key)
         if cached is not None:
             return cached
@@ -158,10 +197,18 @@ class CanvasTools:
             timeout=30,
         )
         response.raise_for_status()
-        return self._cache_set(cache_key, self._normalize_assignment(response.json()))
+        assignment = self._normalize_assignment(response.json())
+        assignment_revision = self._resource_revision({"updated_at": revision} if revision else None, assignment)
+        cache_key = self._cache_key_for_revision("assignment", course_id, assignment_id, revision=assignment_revision)
+        return self._cache_set(cache_key, assignment)
 
-    def _direct_get_page(self, course_id: int, page_url: str) -> Dict[str, Any]:
-        cache_key = self._cache_key("page", course_id, page_url)
+    def _direct_get_page(
+        self,
+        course_id: int,
+        page_url: str,
+        revision: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        cache_key = self._cache_key_for_revision("page", course_id, page_url, revision=revision)
         cached = self._cache_get(cache_key)
         if cached is not None:
             return cached
@@ -172,10 +219,18 @@ class CanvasTools:
             timeout=30,
         )
         response.raise_for_status()
-        return self._cache_set(cache_key, response.json())
+        page = response.json()
+        page_revision = self._resource_revision({"updated_at": revision} if revision else None, page)
+        cache_key = self._cache_key_for_revision("page", course_id, page_url, revision=page_revision)
+        return self._cache_set(cache_key, page)
 
-    def _direct_get_discussion_topic(self, course_id: int, topic_id: int) -> Dict[str, Any]:
-        cache_key = self._cache_key("discussion", course_id, topic_id)
+    def _direct_get_discussion_topic(
+        self,
+        course_id: int,
+        topic_id: int,
+        revision: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        cache_key = self._cache_key_for_revision("discussion", course_id, topic_id, revision=revision)
         cached = self._cache_get(cache_key)
         if cached is not None:
             return cached
@@ -186,7 +241,10 @@ class CanvasTools:
             timeout=30,
         )
         response.raise_for_status()
-        return self._cache_set(cache_key, response.json())
+        discussion = response.json()
+        discussion_revision = self._resource_revision({"updated_at": revision} if revision else None, discussion)
+        cache_key = self._cache_key_for_revision("discussion", course_id, topic_id, revision=discussion_revision)
+        return self._cache_set(cache_key, discussion)
 
     @staticmethod
     def _query_terms(query: str) -> list[str]:
@@ -229,7 +287,8 @@ class CanvasTools:
         module: Dict[str, Any],
         item: Dict[str, Any],
     ) -> Optional[Dict[str, Any]]:
-        cache_key = self._cache_key(
+        item_revision = self._resource_revision(module, item)
+        cache_key = self._cache_key_for_revision(
             "module-item-context",
             course_id,
             module.get("id"),
@@ -239,6 +298,7 @@ class CanvasTools:
             item.get("page_url"),
             item.get("external_url"),
             item.get("url"),
+            revision=item_revision,
         )
         cached = self._cache_get(cache_key)
         if cached is not None:
@@ -246,6 +306,7 @@ class CanvasTools:
 
         title = item.get("title") or item.get("page_url") or item.get("type", "Module Item")
         item_type = item.get("type", "Unknown")
+        content_revision = item_revision
         text_parts = [
             f"Module: {module.get('name', 'Course Module')}",
             f"Item: {title}",
@@ -253,13 +314,19 @@ class CanvasTools:
         ]
 
         if item_type == "Page" and item.get("page_url"):
-            page = self._direct_get_page(course_id, item["page_url"])
+            page = self._direct_get_page(course_id, item["page_url"], revision=item_revision)
+            content_revision = self._resource_revision(module, item, page)
             title = page.get("title") or title
             body = html_to_markdown(page.get("body", ""))
             if body:
                 text_parts.append(body)
         elif item_type == "Assignment" and item.get("content_id"):
-            assignment = self._direct_get_assignment(course_id, int(item["content_id"]))
+            assignment = self._direct_get_assignment(
+                course_id,
+                int(item["content_id"]),
+                revision=item_revision,
+            )
+            content_revision = self._resource_revision(module, item, assignment)
             title = assignment.get("name") or title
             description = html_to_markdown(assignment.get("description", ""))
             if description:
@@ -267,7 +334,12 @@ class CanvasTools:
             if assignment.get("due_at"):
                 text_parts.append(f"Due: {assignment['due_at']}")
         elif item_type == "Discussion" and item.get("content_id"):
-            discussion = self._direct_get_discussion_topic(course_id, int(item["content_id"]))
+            discussion = self._direct_get_discussion_topic(
+                course_id,
+                int(item["content_id"]),
+                revision=item_revision,
+            )
+            content_revision = self._resource_revision(module, item, discussion)
             title = discussion.get("title") or title
             message = html_to_markdown(discussion.get("message", ""))
             if message:
@@ -284,6 +356,18 @@ class CanvasTools:
         text = "\n\n".join(part.strip() for part in text_parts if part and part.strip())
         if not text.strip():
             return None
+        cache_key = self._cache_key_for_revision(
+            "module-item-context",
+            course_id,
+            module.get("id"),
+            item.get("id"),
+            item.get("type"),
+            item.get("content_id"),
+            item.get("page_url"),
+            item.get("external_url"),
+            item.get("url"),
+            revision=content_revision,
+        )
         return self._cache_set(
             cache_key,
             self._build_module_context_entry(
