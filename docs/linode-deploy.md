@@ -103,6 +103,14 @@ Smoke test status:
 ssh root@<LINODE_IP> 'systemctl status canvas-github-agent-smoke.service --no-pager'
 ```
 
+The smoke service now runs a minimal retrieval command:
+
+```bash
+ssh root@<LINODE_IP> 'sudo -u canvasagent /opt/canvas-github-agent/.venv/bin/canvas-github-agent search-context --course-id 1 --query smoke --limit 1'
+```
+
+This is expected to return zero results on a fresh server, but it verifies that the CLI, Python environment, Chroma dependency, and configured storage path are all usable.
+
 Interactive run (manual):
 
 ```bash
