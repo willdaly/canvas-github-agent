@@ -105,3 +105,22 @@ def test_course_context_ingest_and_search_round_trip(monkeypatch):
     ]
     assert results[0]["section_title"] == "Bayes Review"
     assert "Posterior update" in results[0]["text"]
+
+
+def test_get_collection_sanitizes_chroma_base_exception(monkeypatch):
+    class FakePanic(BaseException):
+        pass
+
+    class FakeChroma:
+        @staticmethod
+        def PersistentClient(path):
+            raise FakePanic("rust panic")
+
+    tools = CourseContextTools()
+    monkeypatch.setattr(tools, "_require_chroma", lambda: FakeChroma)
+
+    try:
+        tools.list_documents(6660)
+        assert False, "Expected RuntimeError"
+    except RuntimeError as error:
+        assert str(error) == "Course context retrieval unavailable: local Chroma store could not be opened."

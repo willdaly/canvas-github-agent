@@ -132,7 +132,14 @@ class CourseContextTools:
     def _get_collection(self):
         chromadb = self._require_chroma()
         self.storage_path.mkdir(parents=True, exist_ok=True)
-        client = chromadb.PersistentClient(path=str(self.storage_path))
+        try:
+            client = chromadb.PersistentClient(path=str(self.storage_path))
+        except BaseException as error:
+            if isinstance(error, (KeyboardInterrupt, SystemExit)):
+                raise
+            raise RuntimeError(
+                "Course context retrieval unavailable: local Chroma store could not be opened."
+            ) from error
         return client.get_or_create_collection(name=self.collection_name)
 
     def _parse_pdf(self, file_path: str) -> dict[str, Any]:

@@ -190,7 +190,6 @@ export default function App() {
     setLoading("");
   }
 
-  const btn = "px-4 py-2 rounded-lg font-medium text-sm transition-all";
   const inputStyle = {
     width: "100%",
     boxSizing: "border-box",
@@ -202,25 +201,86 @@ export default function App() {
     fontSize: 14,
     marginTop: 4,
   };
+  const shellStyle = {
+    fontFamily: '"IBM Plex Sans", "Segoe UI", sans-serif',
+    minHeight: "100vh",
+    color: "#e2e8f0",
+    padding: "clamp(1.25rem, 3vw, 2.5rem)",
+  };
+  const contentStyle = {
+    width: "min(100%, 780px)",
+    margin: "0 auto",
+  };
+  const headingStyle = {
+    marginBottom: "1.5rem",
+    textAlign: "center",
+    width: "100%",
+  };
+  const primaryButtonStyle = {
+    border: "none",
+    borderRadius: 12,
+    padding: "0.78rem 1.2rem",
+    fontSize: 14,
+    fontWeight: 700,
+    color: "#f8fafc",
+    cursor: "pointer",
+    background: "linear-gradient(135deg, #818cf8 0%, #4f46e5 100%)",
+    boxShadow: "0 12px 28px rgba(79, 70, 229, 0.35)",
+  };
+  const secondaryButtonStyle = {
+    border: "1px solid rgba(148, 163, 184, 0.25)",
+    borderRadius: 10,
+    padding: "0.65rem 1rem",
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#e2e8f0",
+    background: "rgba(71, 85, 105, 0.45)",
+    cursor: "pointer",
+  };
+  const pillButtonStyle = {
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid #334155",
+    background: "#0f172a",
+    color: "#cbd5e1",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+  };
+  const choiceCardStyle = {
+    textAlign: "left",
+    borderRadius: 12,
+    border: "1px solid #334155",
+    background: "rgba(15, 23, 42, 0.72)",
+    padding: "0.9rem 1rem",
+    color: "#e2e8f0",
+    cursor: "pointer",
+    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.02)",
+  };
+  const activeChoiceCardStyle = {
+    borderColor: "#818cf8",
+    background: "linear-gradient(180deg, rgba(49, 46, 129, 0.95) 0%, rgba(30, 41, 59, 0.96) 100%)",
+    boxShadow: "0 12px 26px rgba(99, 102, 241, 0.2)",
+  };
 
   if (!authChecked) {
     return (
-      <div style={{ fontFamily: "Inter, sans-serif", background: "#0f172a", minHeight: "100vh", color: "#94a3b8", padding: "2rem" }}>
+      <div style={{ ...shellStyle, color: "#94a3b8" }}>
         <p>Loading…</p>
       </div>
     );
   }
 
   return (
-    <div style={{ fontFamily: "Inter, sans-serif", background: "#0f172a", minHeight: "100vh", color: "#e2e8f0", padding: "2rem" }}>
-      <div style={{ maxWidth: 640, margin: "0 auto" }}>
+    <div style={shellStyle}>
+      <div style={contentStyle}>
 
-        <div style={{ marginBottom: "2rem" }}>
-          <h1 style={{ fontSize: "1.8rem", fontWeight: 700, color: "#f8fafc", margin: 0 }}>
+        <div style={headingStyle}>
+          <h1 style={{ fontSize: "clamp(2rem, 4vw, 2.6rem)", fontWeight: 700, color: "#f8fafc", margin: 0, letterSpacing: "-0.03em" }}>
             🎓 Canvas Assignment Agent
           </h1>
-          <p style={{ color: "#94a3b8", marginTop: 6 }}>
-            Northeastern Canvas and your GitHub — paste tokens once per browser; they are encrypted on the server.
+          <p style={{ color: "#94a3b8", margin: "10px auto 0", maxWidth: 620, lineHeight: 1.6, fontSize: 16 }}>
+            Northeastern Canvas and your GitHub
           </p>
         </div>
 
@@ -232,6 +292,8 @@ export default function App() {
                   Canvas base URL: <strong style={{ color: "#e2e8f0" }}>{authStatus?.canvas_institution_url || "—"}</strong>
                   <br />
                   Create a Canvas access token under Account → Settings → Approved Integrations. Use a GitHub PAT with repo scope.
+                  <br />
+                  paste tokens once per browser; they are encrypted on the server.
                 </p>
                 <label style={{ fontSize: 12, color: "#94a3b8", display: "block", marginTop: 12 }}>Canvas API token</label>
                 <input type="password" autoComplete="off" value={canvasToken} onChange={(ev) => setCanvasToken(ev.target.value)} style={inputStyle} required />
@@ -239,14 +301,14 @@ export default function App() {
                 <input type="password" autoComplete="off" value={githubToken} onChange={(ev) => setGithubToken(ev.target.value)} style={inputStyle} required />
                 <label style={{ fontSize: 12, color: "#94a3b8", display: "block", marginTop: 12 }}>GitHub username</label>
                 <input type="text" autoComplete="username" value={githubUsername} onChange={(ev) => setGithubUsername(ev.target.value)} style={inputStyle} required />
-                <button type="submit" disabled={authBusy} className={btn} style={{ marginTop: 16, background: "#6366f1", color: "white", border: "none", cursor: "pointer", padding: "10px 20px", borderRadius: 8 }}>
+                <button type="submit" disabled={authBusy} style={{ ...primaryButtonStyle, marginTop: 16, opacity: authBusy ? 0.7 : 1 }}>
                   {authBusy ? "Saving…" : "Save & connect"}
                 </button>
               </form>
             ) : (
               <div>
                 <p style={{ margin: 0, color: "#86efac", fontSize: 14 }}>Session active — requests use your stored tokens.</p>
-                <button type="button" onClick={logout} className={btn} style={{ marginTop: 12, background: "#475569", color: "white", border: "none", cursor: "pointer", padding: "8px 16px", borderRadius: 8, fontSize: 13 }}>
+                <button type="button" onClick={logout} style={{ ...secondaryButtonStyle, marginTop: 12 }}>
                   Sign out (clear session)
                 </button>
               </div>
@@ -263,8 +325,8 @@ export default function App() {
         {mainUnlocked && (
         <>
         <Section title="Step 1 — Load Your Courses">
-          <button className={btn} onClick={fetchCourses} disabled={!!loading}
-            style={{ background: "#6366f1", color: "white", opacity: loading ? 0.6 : 1, border: "none", cursor: "pointer", padding: "10px 20px", borderRadius: 8 }}>
+          <button onClick={fetchCourses} disabled={!!loading}
+            style={{ ...primaryButtonStyle, opacity: loading ? 0.6 : 1 }}>
             {loading === "courses" ? "Loading..." : "🔄 Fetch Courses"}
           </button>
           {courses.length > 0 && (
@@ -272,10 +334,10 @@ export default function App() {
               {courses.map(c => (
                 <button key={c.id} onClick={() => fetchAssignments(c.id)}
                   style={{
-                    textAlign: "left", padding: "10px 14px", borderRadius: 8, border: "1px solid",
-                    borderColor: selectedCourse === c.id ? "#6366f1" : "#334155",
-                    background: selectedCourse === c.id ? "#1e1b4b" : "#1e293b",
-                    color: "#e2e8f0", cursor: "pointer", fontSize: 14
+                    ...choiceCardStyle,
+                    ...(selectedCourse === c.id ? activeChoiceCardStyle : null),
+                    padding: "10px 14px",
+                    fontSize: 14,
                   }}>
                   <span style={{ color: "#94a3b8", marginRight: 8 }}>#{c.id}</span>{c.name}
                 </button>
@@ -296,14 +358,11 @@ export default function App() {
                   key={filter.key}
                   onClick={() => setAssignmentFilter(filter.key)}
                   style={{
-                    padding: "8px 12px",
-                    borderRadius: 999,
-                    border: "1px solid",
-                    borderColor: assignmentFilter === filter.key ? "#6366f1" : "#334155",
-                    background: assignmentFilter === filter.key ? "#1e1b4b" : "#0f172a",
-                    color: "#e2e8f0",
-                    fontSize: 13,
-                    cursor: "pointer",
+                    ...pillButtonStyle,
+                    borderColor: assignmentFilter === filter.key ? "#818cf8" : pillButtonStyle.border,
+                    background: assignmentFilter === filter.key ? "rgba(49, 46, 129, 0.95)" : pillButtonStyle.background,
+                    color: assignmentFilter === filter.key ? "#f8fafc" : pillButtonStyle.color,
+                    boxShadow: assignmentFilter === filter.key ? "0 8px 18px rgba(79, 70, 229, 0.22)" : "none",
                   }}
                 >
                   {filter.label}
@@ -315,10 +374,10 @@ export default function App() {
               {assignmentFilter !== "completed" && (
                 <button onClick={() => setSelectedAssignment(null)}
                   style={{
-                    textAlign: "left", padding: "10px 14px", borderRadius: 8, border: "1px solid",
-                    borderColor: selectedAssignment === null ? "#6366f1" : "#334155",
-                    background: selectedAssignment === null ? "#1e1b4b" : "#1e293b",
-                    color: "#e2e8f0", cursor: "pointer", fontSize: 14
+                    ...choiceCardStyle,
+                    ...(selectedAssignment === null ? activeChoiceCardStyle : null),
+                    padding: "10px 14px",
+                    fontSize: 14,
                   }}>
                   ⏭ Next upcoming assignment (auto)
                 </button>
@@ -326,10 +385,10 @@ export default function App() {
               {filteredAssignments.map(a => (
                 <button key={a.id} onClick={() => setSelectedAssignment(a.id)}
                   style={{
-                    textAlign: "left", padding: "10px 14px", borderRadius: 8, border: "1px solid",
-                    borderColor: selectedAssignment === a.id ? "#6366f1" : "#334155",
-                    background: selectedAssignment === a.id ? "#1e1b4b" : "#1e293b",
-                    color: "#e2e8f0", cursor: "pointer", fontSize: 14
+                    ...choiceCardStyle,
+                    ...(selectedAssignment === a.id ? activeChoiceCardStyle : null),
+                    padding: "10px 14px",
+                    fontSize: 14,
                   }}>
                   <span style={{ color: "#94a3b8", marginRight: 8 }}>#{a.id}</span>{a.name}
                   {a.due_at && <span style={{ color: "#64748b", marginLeft: 8, fontSize: 12 }}>Due: {new Date(a.due_at).toLocaleDateString()}</span>}
@@ -361,14 +420,8 @@ export default function App() {
                   key={option.key}
                   onClick={() => setRouteMode(option.key)}
                   style={{
-                    textAlign: "left",
-                    borderRadius: 10,
-                    border: "1px solid",
-                    borderColor: routeMode === option.key ? "#6366f1" : "#334155",
-                    background: routeMode === option.key ? "#1e1b4b" : "#1e293b",
-                    padding: "0.8rem 0.9rem",
-                    color: "#e2e8f0",
-                    cursor: "pointer",
+                    ...choiceCardStyle,
+                    ...(routeMode === option.key ? activeChoiceCardStyle : null),
                   }}
                 >
                   <div style={{ fontSize: 14, fontWeight: 600 }}>{option.title}</div>
@@ -406,14 +459,13 @@ export default function App() {
                       key={option.key}
                       onClick={() => setNotionContentMode(option.key)}
                       style={{
-                        textAlign: "left",
-                        borderRadius: 10,
-                        border: "1px solid",
-                        borderColor: notionContentMode === option.key ? "#14b8a6" : "#334155",
-                        background: notionContentMode === option.key ? "#0f3b3a" : "#1e293b",
+                        ...choiceCardStyle,
+                        borderColor: notionContentMode === option.key ? "#2dd4bf" : choiceCardStyle.borderColor,
+                        background: notionContentMode === option.key
+                          ? "linear-gradient(180deg, rgba(15, 118, 110, 0.9) 0%, rgba(30, 41, 59, 0.96) 100%)"
+                          : choiceCardStyle.background,
+                        boxShadow: notionContentMode === option.key ? "0 12px 26px rgba(20, 184, 166, 0.18)" : choiceCardStyle.boxShadow,
                         padding: "0.75rem 0.85rem",
-                        color: "#e2e8f0",
-                        cursor: "pointer",
                       }}
                     >
                       <div style={{ fontSize: 14, fontWeight: 600 }}>{option.title}</div>
@@ -429,7 +481,7 @@ export default function App() {
             </div>
 
             <button onClick={handleCreate} disabled={!!loading}
-              style={{ marginTop: "1.2rem", background: "#10b981", color: "white", padding: "10px 24px", borderRadius: 8, border: "none", fontSize: 15, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1 }}>
+              style={{ marginTop: "1.2rem", border: "none", borderRadius: 14, background: "linear-gradient(135deg, #34d399 0%, #059669 100%)", color: "white", padding: "0.9rem 1.45rem", fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1, boxShadow: "0 14px 30px rgba(5, 150, 105, 0.28)" }}>
               {loading === "create"
                 ? "⏳ Creating..."
                 : routeMode === "github"
@@ -484,8 +536,8 @@ export default function App() {
 
 function Section({ title, children }) {
   return (
-    <div style={{ background: "#1e293b", borderRadius: 12, padding: "1.2rem 1.4rem", marginBottom: "1.2rem", border: "1px solid #334155" }}>
-      <h2 style={{ margin: "0 0 1rem", fontSize: "0.95rem", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>{title}</h2>
+    <div style={{ background: "rgba(30, 41, 59, 0.88)", borderRadius: 18, padding: "1.15rem 1.25rem", marginBottom: "1rem", border: "1px solid rgba(148, 163, 184, 0.18)", boxShadow: "0 18px 40px rgba(15, 23, 42, 0.18)", backdropFilter: "blur(10px)" }}>
+      <h2 style={{ margin: "0 0 0.9rem", fontSize: "0.85rem", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.09em" }}>{title}</h2>
       {children}
     </div>
   );

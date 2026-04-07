@@ -1021,6 +1021,35 @@ class TestCanvasGitHubAgent:
                 document_context[1],
             ]
 
+    def test_fetch_course_context_falls_back_to_modules_when_document_search_fails(self):
+        from app.agent import CanvasGitHubAgent
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_TOKEN': 'test_token',
+            'GITHUB_TOKEN': 'test_gh_token',
+            'GITHUB_USERNAME': 'testuser'
+        }):
+            agent = CanvasGitHubAgent()
+            assignment = {
+                "name": "Posterior Homework",
+                "description": "Implement Bayesian updating.",
+            }
+            module_context = [
+                {
+                    "document_name": "Canvas Module: Week 4",
+                    "section_title": "Bayes theorem page",
+                    "text": "Module walkthrough of posterior updates.",
+                    "item_type": "Page",
+                }
+            ]
+
+            agent.course_context_tools.search_context = Mock(side_effect=RuntimeError("boom"))
+            agent.canvas_tools.search_course_module_context = AsyncMock(return_value=module_context)
+
+            result = asyncio.run(agent.fetch_course_context(123, assignment, limit=3))
+
+            assert result == module_context
+
     def test_run_routes_writing_to_notion(self):
         """Run routes writing assignments to Notion page creation path."""
         from app.agent import CanvasGitHubAgent

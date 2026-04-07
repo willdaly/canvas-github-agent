@@ -340,7 +340,7 @@ class CanvasGitHubAgent:
             )
         except RuntimeError as error:
             print(f"\n⚠️  Course context search skipped: {error}")
-            return []
+            document_context = []
         except Exception as error:
             print(f"\n⚠️  Course context search failed: {error}")
             document_context = []
