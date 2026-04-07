@@ -44,6 +44,18 @@ class GitHubTools:
                 await session.initialize()
                 yield session
     
+    async def repository_exists(self, owner: str, repo: str) -> bool:
+        """Check whether a repository already exists on GitHub."""
+        async with self.get_github_session() as session:
+            try:
+                result = await session.call_tool(
+                    "get_file_contents",
+                    arguments={"owner": owner, "repo": repo, "path": ""},
+                )
+                return True
+            except Exception:
+                return False
+
     async def create_repository(
         self,
         name: str,

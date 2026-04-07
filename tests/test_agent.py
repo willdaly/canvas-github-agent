@@ -1196,6 +1196,73 @@ class TestWorkflowHelpers:
         assert "NOTION_TOKEN" in missing
         assert "NOTION_PARENT_PAGE_ID" in missing
 
+    def test_create_repository_deduplicates_name_when_repo_exists(self):
+        """If a repo already exists, the agent appends a numeric suffix."""
+        from app.agent import CanvasGitHubAgent
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_TOKEN': 'test_token',
+            'GITHUB_TOKEN': 'test_gh_token',
+            'GITHUB_USERNAME': 'testuser',
+        }):
+            agent = CanvasGitHubAgent()
+
+            # First call: repo exists; second call: name is free
+            agent.github_tools.repository_exists = AsyncMock(side_effect=[True, False])
+            agent.github_tools.create_repository = AsyncMock(return_value={
+                "name": "my-assignment-2",
+                "owner": {"login": "testuser"},
+            })
+            agent.github_tools.create_directory_structure = AsyncMock(return_value=True)
+
+            assignment = {
+                "name": "My Assignment",
+                "description": "desc",
+                "due_at": "2026-04-01",
+            }
+
+            result = asyncio.run(
+                agent.create_repository_for_assignment(assignment, language="python")
+            )
+
+            assert result is not None
+            # The repo should have been created with the suffixed name
+            agent.github_tools.create_repository.assert_awaited_once()
+            call_args = agent.github_tools.create_repository.call_args
+            assert call_args.kwargs["name"] == "my-assignment-2"
+
+    def test_create_repository_uses_original_name_when_no_conflict(self):
+        """When no repo conflict exists, the original slug is used."""
+        from app.agent import CanvasGitHubAgent
+
+        with patch.dict('os.environ', {
+            'CANVAS_API_TOKEN': 'test_token',
+            'GITHUB_TOKEN': 'test_gh_token',
+            'GITHUB_USERNAME': 'testuser',
+        }):
+            agent = CanvasGitHubAgent()
+
+            agent.github_tools.repository_exists = AsyncMock(return_value=False)
+            agent.github_tools.create_repository = AsyncMock(return_value={
+                "name": "my-assignment",
+                "owner": {"login": "testuser"},
+            })
+            agent.github_tools.create_directory_structure = AsyncMock(return_value=True)
+
+            assignment = {
+                "name": "My Assignment",
+                "description": "desc",
+                "due_at": "2026-04-01",
+            }
+
+            result = asyncio.run(
+                agent.create_repository_for_assignment(assignment, language="python")
+            )
+
+            assert result is not None
+            call_args = agent.github_tools.create_repository.call_args
+            assert call_args.kwargs["name"] == "my-assignment"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

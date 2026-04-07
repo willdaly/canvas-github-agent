@@ -216,6 +216,15 @@ class CanvasGitHubAgent:
         short_description = self.strip_html(assignment_description)[:200]
         repo_name = normalize_slug(assignment_name)
 
+        owner = self.github_org if self.github_org else self.github_username
+        base_name = repo_name
+        suffix = 2
+        while await self.github_tools.repository_exists(owner, repo_name):
+            repo_name = f"{base_name}-{suffix}"
+            suffix += 1
+            if suffix > 100:
+                break
+
         print(f"\nCreating repository: {repo_name}")
         repo = await self.github_tools.create_repository(
             name=repo_name,
@@ -243,7 +252,6 @@ class CanvasGitHubAgent:
             assignment_artifacts=list(assignment_artifacts or []),
         )
 
-        owner = self.github_org if self.github_org else self.github_username
         print("\nAdding starter files to repository...")
         files_ok = await self.github_tools.create_directory_structure(
             owner=owner,
