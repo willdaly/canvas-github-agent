@@ -40,6 +40,17 @@ export default function App() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (!authChecked) return;
+    const sessionAuth = Boolean(authStatus?.session_auth_enabled);
+    const authenticated = Boolean(authStatus?.authenticated);
+    const unlocked = !sessionAuth || authenticated;
+    if (unlocked && courses.length === 0) {
+      fetchCourses();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authChecked, authStatus]);
+
   async function parseResponse(res) {
     const contentType = res.headers.get("content-type") || "";
     if (contentType.includes("application/json")) {
@@ -324,25 +335,31 @@ export default function App() {
 
         {mainUnlocked && (
         <>
-        <Section title="Step 1 — Load Your Courses">
-          <button onClick={fetchCourses} disabled={!!loading}
-            style={{ ...primaryButtonStyle, opacity: loading ? 0.6 : 1 }}>
-            {loading === "courses" ? "Loading..." : "🔄 Fetch Courses"}
-          </button>
-          {courses.length > 0 && (
-            <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: 8 }}>
-              {courses.map(c => (
-                <button key={c.id} onClick={() => fetchAssignments(c.id)}
-                  style={{
-                    ...choiceCardStyle,
-                    ...(selectedCourse === c.id ? activeChoiceCardStyle : null),
-                    padding: "10px 14px",
-                    fontSize: 14,
-                  }}>
-                  <span style={{ color: "#94a3b8", marginRight: 8 }}>#{c.id}</span>{c.name}
-                </button>
-              ))}
-            </div>
+        <Section title="Step 1 — Pick a Course">
+          {loading === "courses" ? (
+            <p style={{ margin: 0, color: "#94a3b8", fontSize: 14 }}>Loading courses…</p>
+          ) : (
+            <>
+              {courses.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {courses.map(c => (
+                    <button key={c.id} onClick={() => fetchAssignments(c.id)}
+                      style={{
+                        ...choiceCardStyle,
+                        ...(selectedCourse === c.id ? activeChoiceCardStyle : null),
+                        padding: "10px 14px",
+                        fontSize: 14,
+                      }}>
+                      <span style={{ color: "#94a3b8", marginRight: 8 }}>#{c.id}</span>{c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button onClick={fetchCourses} disabled={!!loading}
+                style={{ ...secondaryButtonStyle, marginTop: courses.length > 0 ? "0.75rem" : 0, fontSize: 12 }}>
+                Refresh courses
+              </button>
+            </>
           )}
         </Section>
 
