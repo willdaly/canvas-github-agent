@@ -17,6 +17,8 @@ The runtime architecture is orchestration-first, not a multi-agent task pipeline
 
 ## Architecture
 
+[View interactive system architecture diagram on Miro](https://miro.com/app/board/uXjVGl7o1Oo=/?moveToWidget=3458764666993741044)
+
 - app/agent.py: workflow orchestrator and CLI command entrypoint
 - app/cli.py: interactive CLI
 - api.py: FastAPI surface for frontend and integrations
