@@ -10,8 +10,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.agent import CanvasGitHubAgent
@@ -2144,3 +2147,8 @@ async def search_course_context_tools(course_id: int, req: CourseContextSearchRe
     except Exception:
         logger.exception("Failed to search course context for course_id=%s", course_id)
         raise HTTPException(status_code=500, detail="Failed to search course context.")
+
+
+_FRONTEND_DIST = Path(__file__).parent / "frontend" / "dist"
+if _FRONTEND_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=_FRONTEND_DIST, html=True), name="ui")

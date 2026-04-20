@@ -115,7 +115,7 @@ class CourseContextTools:
             from docling.document_converter import DocumentConverter
         except ImportError as error:
             raise RuntimeError(
-                "Course context ingestion requires docling. Install project dependencies first."
+                "Course context ingestion requires docling. Install with: pip install '.[ingestion]'"
             ) from error
         return DocumentConverter
 
